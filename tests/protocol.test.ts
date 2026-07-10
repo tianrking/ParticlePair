@@ -31,6 +31,7 @@ import { ScanLoadController } from "../lib/scan-load";
 import { CandidateConsensus } from "../lib/candidate-consensus";
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { cameraConstraintPlan, tuneCameraTrack } from "../lib/camera-tuning";
+import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth } from "../lib/resolution-governor";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -237,6 +238,25 @@ test("camera tuning fails open when capability discovery is absent or throws", a
   const native = await tuneCameraTrack({ applyConstraints: async () => { calls += 1; } });
   const guarded = await tuneCameraTrack({ getCapabilities: () => { throw new Error("driver"); }, applyConstraints: async () => { calls += 1; } });
   assert.equal(native.status, "native"); assert.equal(guarded.status, "native"); assert.equal(calls, 0);
+});
+
+test("resolution governor degrades slowly and restores with longer hysteresis", () => {
+  const governor = new ResolutionGovernor(); governor.reset("hd");
+  const hot = { processingMs: 32, state: "cooling" as const, utilization: 0.8 };
+  for (let observation = 0; observation < 5; observation += 1) assert.equal(governor.observe(hot), null);
+  assert.equal(governor.observe(hot), "eco"); governor.confirm("eco");
+  const cool = { processingMs: 8, state: "normal" as const, utilization: 0.24 };
+  for (let observation = 0; observation < 19; observation += 1) assert.equal(governor.observe(cool), null);
+  assert.equal(governor.observe(cool), "hd"); governor.disable();
+  for (let observation = 0; observation < 30; observation += 1) assert.equal(governor.observe(hot), null);
+});
+
+test("resolution targets clamp to camera ranges and reflect actual settings", () => {
+  const eco = resolutionConstraints("eco", { width: { min: 800, max: 1920 }, height: { min: 480, max: 1080 } });
+  const hd = resolutionConstraints("hd", { width: { min: 320, max: 1000 }, height: { min: 240, max: 600 } });
+  assert.deepEqual(eco, { width: { ideal: 800 }, height: { ideal: 480 } });
+  assert.deepEqual(hd, { width: { ideal: 1000 }, height: { ideal: 600 } });
+  assert.equal(resolutionProfileFromWidth(1280), "hd"); assert.equal(resolutionProfileFromWidth(960), "eco");
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

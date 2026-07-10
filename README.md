@@ -220,6 +220,8 @@ Camera lifetime is an explicit state machine: idle, running, suspended, or ended
 
 Camera tuning is capability-driven progressive enhancement, never a hardware requirement. If `getCapabilities()` explicitly advertises continuous focus, exposure, or white balance, each mode is applied in a separate guarded `applyConstraints()` call. One rejected driver feature cannot roll back the others; absent, incomplete, or throwing capability APIs result in zero tuning calls and native browser automation. `AF·AE` appears only when continuous autofocus was actually accepted.
 
+Capture resolution follows measured load rather than device names. Six sustained hot/cooling observations request an ECO target of 640×360; twenty sustained low-load observations request HD 1280×720 again. Targets are clamped to the track's advertised width/height range, each change is verified through `getSettings()`, and a rejected or silently ignored change disables further attempts for that session. Successful changes clear all temporal evidence and recompute object-fit geometry, while the optical sampler remains the same normalized 36×36 patch. `GEO…·HD/ECO` reports the actual capture tier.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

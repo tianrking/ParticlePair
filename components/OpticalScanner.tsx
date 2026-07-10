@@ -30,6 +30,7 @@ import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
 import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/candidate-consensus";
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { tuneCameraTrack, type CameraTuningResult } from "../lib/camera-tuning";
+import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth, type CaptureResolutionProfile } from "../lib/resolution-governor";
 
 interface OpticalScannerProps {
   language: Language;
@@ -186,9 +187,12 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const loadRef = useRef(new ScanLoadController());
   const consensusRef = useRef(new CandidateConsensus());
   const lifecycleRef = useRef(new CameraLifecycle());
+  const resolutionGovernorRef = useRef(new ResolutionGovernor());
+  const resolutionChangingRef = useRef(false);
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [cameraTuning, setCameraTuning] = useState<CameraTuningResult>(INITIAL_TUNING);
+  const [captureProfile, setCaptureProfile] = useState<CaptureResolutionProfile | null>(null);
   const [quality, setQuality] = useState(0);
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
@@ -230,6 +234,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     streamRef.current = null;
     runningRef.current = false;
     setCameraTuning(INITIAL_TUNING);
+    setCaptureProfile(null);
     resetScannerEvidence();
     setRunning(false);
     setMessage({ kind: "stopped" });
@@ -259,6 +264,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     streamRef.current = null;
     runningRef.current = false;
     setCameraTuning(INITIAL_TUNING);
+    setCaptureProfile(null);
     resetScannerEvidence();
     setRunning(false);
     setMessage({ kind: "interrupted" });
@@ -306,6 +312,24 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     }
   }
 
+  function considerResolution(load: ScanLoadSnapshot): void {
+    const target = resolutionGovernorRef.current.observe(load);
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!target || !track || resolutionChangingRef.current || lifecycleRef.current.state === "ended") return;
+    resolutionChangingRef.current = true;
+    let capabilities: MediaTrackCapabilities = {};
+    try { capabilities = track.getCapabilities?.() ?? {}; } catch { capabilities = {}; }
+    void track.applyConstraints(resolutionConstraints(target, capabilities)).then(() => {
+      if (streamRef.current?.getVideoTracks()[0] !== track) return;
+      const actualProfile = resolutionProfileFromWidth(track.getSettings().width);
+      if (actualProfile === target) resolutionGovernorRef.current.confirm(actualProfile);
+      else resolutionGovernorRef.current.disable();
+      setCaptureProfile(actualProfile);
+      resetScannerEvidence();
+      if (lifecycleRef.current.state === "running") setMessage({ kind: "searching" });
+    }).catch(() => resolutionGovernorRef.current.disable()).finally(() => { resolutionChangingRef.current = false; });
+  }
+
   function sample(timestamp: number): void {
     const video = videoRef.current;
     if (
@@ -347,6 +371,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       const ranked = rankedResult.ranked;
       processingDurationMs += rankedResult.durationMs;
       const load = loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
+      considerResolution(load);
       const best = ranked[0];
       const consensus = consensusRef.current.observe(ranked.map((candidate) => ({ key: candidate.key, quality: candidate.analysis.quality, transform: candidate.transform })));
       const score = best?.analysis.quality ?? 0;
@@ -479,7 +504,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : best?.captureHealth?.focusState === "soft" ? { kind: "softfocus" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
-      loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
+      considerResolution(loadRef.current.observe(processingDurationMs, timing.frameIntervalMs));
       setMessage(timing.state === "jittery" ? { kind: "timing" } : { kind: "synchronizing" });
     }
 
@@ -514,6 +539,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       video.srcObject = stream;
       const track = stream.getVideoTracks()[0];
       setCameraTuning(track ? await tuneCameraTrack(track) : INITIAL_TUNING);
+      const initialProfile = resolutionProfileFromWidth(track?.getSettings().width);
+      resolutionGovernorRef.current.reset(initialProfile);
+      resolutionChangingRef.current = false;
+      setCaptureProfile(initialProfile);
       await video.play();
       resetScannerEvidence();
       runningRef.current = true;
@@ -528,6 +557,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       streamRef.current = null;
       runningRef.current = false;
       setCameraTuning(INITIAL_TUNING);
+      setCaptureProfile(null);
       lifecycleRef.current.transition("stop");
       resetScannerEvidence();
       setRunning(false);
@@ -549,7 +579,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         <span className="scan-quality-label">SYNC {quality}%</span>
         <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"} focus-${telemetry.health?.focusState ?? "unknown"}`} aria-label="Scanner performance, dynamic range, and focus telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
-          <span>GEO {telemetry.candidates}</span>
+          <span className={captureProfile === "eco" ? "resolution-eco" : undefined}>GEO{telemetry.candidates}·{captureProfile?.toUpperCase() ?? "—"}</span>
           <span>{telemetry.timing.fps ? `${telemetry.load.processingMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
           <span className={cameraTuning.applied.includes("focus") ? "camera-tuned" : undefined} title={cameraTuning.applied.length ? `Camera enhancements: ${cameraTuning.applied.join(", ")}` : "Native camera automation"}>{cameraTuning.applied.includes("focus") ? "AF·" : ""}AE×{telemetry.exposureGain.toFixed(2)}</span>
           <span className="health-pill">{telemetry.health ? `DR${Math.round(telemetry.health.score * 100)} · F${Math.round(telemetry.health.focusScore * 100)}` : "DR— · F—"}</span>

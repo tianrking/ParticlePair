@@ -220,6 +220,8 @@ La cámara usa una máquina de estados explícita: inactiva, activa, suspendida 
 
 El ajuste de cámara es una mejora progresiva guiada por capacidades, nunca un requisito de hardware. Solo si `getCapabilities()` anuncia enfoque, exposición o balance de blancos continuos se aplica cada modo mediante una llamada `applyConstraints()` aislada. El rechazo de una función no revierte las demás; una API ausente, incompleta o con error produce cero llamadas de ajuste y conserva la automatización nativa. `AF·AE` aparece únicamente cuando el enfoque continuo fue aceptado realmente.
 
+La resolución de captura responde a la carga medida, no al modelo del dispositivo. Seis observaciones calientes sostenidas solicitan ECO 640×360; veinte observaciones de carga baja solicitan de nuevo HD 1280×720. Los objetivos se limitan al rango de ancho/alto anunciado, cada cambio se verifica con `getSettings()` y un cambio rechazado o ignorado desactiva nuevos intentos durante la sesión. Un cambio correcto borra toda evidencia temporal y recalcula la geometría object-fit, manteniendo el muestreo óptico normalizado de 36×36. `GEO…·HD/ECO` muestra el nivel real.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1
