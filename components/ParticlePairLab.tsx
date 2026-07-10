@@ -29,7 +29,7 @@ import {
 } from "../lib/i18n";
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
 import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
-import { encodeV2Fragment, v2MinuteNow } from "../lib/protocol-v2";
+import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow } from "../lib/protocol-v2";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -212,6 +212,8 @@ export function ParticlePairLab() {
   };
 
   const validSecret = /^[0-9a-f]{32}$/i.test(secretHex);
+  const v2Mask = v2MaskForSequence(v2Sequence);
+  const v2ActiveBlocks = Array.from({ length: 4 }, (_, block) => (v2Mask & (1 << block)) !== 0);
   const selectedVisualMode = getVisualMode(visualMode);
   const filteredModes = VISUAL_MODES.filter((mode) => {
     const categoryMatches = modeCategory === "All" || mode.category === modeCategory;
@@ -440,6 +442,12 @@ export function ParticlePairLab() {
             <div><span>SESSION</span><code>{v2SessionId.toString(16).padStart(8, "0")}</code><i>{protocolMode === 2 ? `EQ ${v2Sequence + 1}/15` : "READY"}</i></div>
           </div>
           <div className={`v2-proof ${v2Test.status}`}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? "TESTING V2…" : "V2 CANVAS PROOF"}</button><div><span>FOUNTAIN RECOVERY</span><strong>{v2Test.detail}</strong></div></div>
+          {protocolMode === 2 ? <div className="fountain-visualizer">
+            <div className="fountain-heading"><span>LIVE EQUATION MATRIX</span><strong>{v2ActiveBlocks.map((active, index) => active ? `B${index}` : "").filter(Boolean).join(" ⊕ ")} → P</strong><i>TTL {Math.max(0, 10 - (v2MinuteNow() - v2IssuedMinute))} MIN</i></div>
+            <div className="source-blocks">{v2ActiveBlocks.map((active, index) => <div key={index} className={active ? "is-active" : ""}><span>B{index}</span><i>{secretHex.slice(index * 8, index * 8 + 8) || "00000000"}</i></div>)}<b>⊕</b><div className="parity-block"><span>P</span><i>MASK {v2Mask.toString(2).padStart(4, "0")}</i></div></div>
+            <div className="equation-schedule" aria-label="Fountain equation schedule">{Array.from({ length: 15 }, (_, index) => <span key={index} className={index === v2Sequence ? "is-current" : index < v2Sequence ? "is-past" : ""}>{v2MaskForSequence(index).toString(16).toUpperCase()}</span>)}</div>
+            <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
+          </div> : null}
           <div className="watch-frame">
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} mode={visualMode} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>

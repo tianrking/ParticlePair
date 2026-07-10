@@ -233,7 +233,7 @@ export async function runRenderedV2FountainLoopback(
     const current = captureCanvasFrame(renderPhaseFrame(canvas, cells, strength, 1500, mode));
     const analysis = analyzeDifferentialFrames(current.values, reference.values);
     const fragment = decodeV2Fragment(extractPayloadBits(analysis.cells), issuedMinute);
-    const progress = decoder.add(fragment); ranks.push(progress.rank);
+    const progress = decoder.add(fragment, issuedMinute); ranks.push(progress.rank);
     if (progress.complete && progress.secretHex) return { fragments: ranks.length, ranks, recoveredSecretHex: progress.secretHex };
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   }

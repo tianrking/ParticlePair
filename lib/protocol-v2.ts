@@ -8,6 +8,8 @@ const BLOCK_BYTES = 4;
 const BLOCK_COUNT = SECRET_BYTES / BLOCK_BYTES;
 const MAX_AGE_MINUTES = 10;
 const MASK_SCHEDULE = [0x1, 0x2, 0x4, 0x8, 0x3, 0x5, 0x9, 0x6, 0xa, 0xc, 0x7, 0xb, 0xd, 0xe, 0xf] as const;
+const MAX_ACTIVE_SESSIONS = 8;
+const MAX_COMPLETED_SESSIONS = 32;
 
 export interface V2Fragment {
   correctedCodewords: number;
@@ -25,6 +27,8 @@ export interface V2DecodeProgress {
   secretHex?: string;
   sessionId: number;
 }
+
+export function v2MaskForSequence(sequence: number): number { return MASK_SCHEDULE[sequence % MASK_SCHEDULE.length]; }
 
 function writeUint32(packet: Uint8Array, offset: number, value: number): void {
   packet[offset] = value >>> 24; packet[offset + 1] = value >>> 16; packet[offset + 2] = value >>> 8; packet[offset + 3] = value;
@@ -46,7 +50,7 @@ function decodePacket(bits: readonly boolean[]): { packet: Uint8Array; corrected
 
 export function encodeV2Fragment(secret: Uint8Array, sessionId: number, issuedMinute: number, sequence: number): boolean[] {
   if (secret.length !== SECRET_BYTES) throw new Error(`Secret must contain ${SECRET_BYTES} bytes`);
-  const mask = MASK_SCHEDULE[sequence % MASK_SCHEDULE.length];
+  const mask = v2MaskForSequence(sequence);
   const payload = new Uint8Array(BLOCK_BYTES);
   for (let block = 0; block < BLOCK_COUNT; block += 1) if (mask & (1 << block)) {
     for (let byte = 0; byte < BLOCK_BYTES; byte += 1) payload[byte] ^= secret[block * BLOCK_BYTES + byte];
@@ -69,6 +73,7 @@ export function decodeV2Fragment(bits: readonly boolean[], nowMinute = Math.floo
 }
 
 interface Equation { mask: number; payload: Uint8Array }
+interface SessionState { equations: Equation[]; lastSeenMinute: number }
 
 function reduceEquations(input: readonly Equation[]): Equation[] {
   const rows = input.map((row) => ({ mask: row.mask, payload: row.payload.slice() }));
@@ -87,22 +92,37 @@ function reduceEquations(input: readonly Equation[]): Equation[] {
 }
 
 export class V2FountainDecoder {
-  private readonly completed = new Set<string>();
-  private readonly sessions = new Map<string, Equation[]>();
+  private readonly completed = new Map<string, number>();
+  private readonly sessions = new Map<string, SessionState>();
 
-  add(fragment: V2Fragment): V2DecodeProgress {
+  add(fragment: V2Fragment, nowMinute = Math.floor(Date.now() / 60000)): V2DecodeProgress {
+    for (const [key, state] of this.sessions) if (nowMinute - state.lastSeenMinute > MAX_AGE_MINUTES) this.sessions.delete(key);
+    for (const [key, completedMinute] of this.completed) if (nowMinute - completedMinute > MAX_AGE_MINUTES) this.completed.delete(key);
     const key = `${fragment.sessionId}:${fragment.issuedMinute}`;
     if (this.completed.has(key)) throw new Error("Particle Code v2 replay rejected");
-    const equations = this.sessions.get(key) ?? [];
-    if (!equations.some((row) => row.mask === fragment.mask && row.payload.every((value, index) => value === fragment.payload[index]))) equations.push({ mask: fragment.mask, payload: fragment.payload.slice() });
-    const reduced = reduceEquations(equations); this.sessions.set(key, reduced);
+    let state = this.sessions.get(key);
+    if (!state) {
+      if (this.sessions.size >= MAX_ACTIVE_SESSIONS) {
+        const oldest = [...this.sessions.entries()].sort((left, right) => left[1].lastSeenMinute - right[1].lastSeenMinute)[0];
+        if (oldest) this.sessions.delete(oldest[0]);
+      }
+      state = { equations: [], lastSeenMinute: nowMinute }; this.sessions.set(key, state);
+    }
+    state.lastSeenMinute = nowMinute;
+    const sameMask = state.equations.find((row) => row.mask === fragment.mask);
+    if (sameMask && !sameMask.payload.every((value, index) => value === fragment.payload[index])) throw new Error("Particle Code v2 conflicting equation rejected");
+    if (!sameMask) state.equations.push({ mask: fragment.mask, payload: fragment.payload.slice() });
+    const reduced = reduceEquations(state.equations); state.equations = reduced;
     const rank = reduced.length;
     const blocks = Array.from({ length: BLOCK_COUNT }, (_, block) => reduced.find((row) => row.mask === (1 << block))?.payload);
     if (rank < BLOCK_COUNT || blocks.some((block) => !block)) return { complete: false, rank, sessionId: fragment.sessionId };
     const secret = new Uint8Array(SECRET_BYTES); blocks.forEach((block, index) => secret.set(block!, index * BLOCK_BYTES));
-    this.sessions.delete(key); this.completed.add(key);
+    this.sessions.delete(key); this.completed.set(key, nowMinute);
+    while (this.completed.size > MAX_COMPLETED_SESSIONS) this.completed.delete(this.completed.keys().next().value!);
     return { complete: true, rank, secret, secretHex: bytesToHex(secret), sessionId: fragment.sessionId };
   }
+
+  diagnostics(): { activeSessions: number; completedSessions: number } { return { activeSessions: this.sessions.size, completedSessions: this.completed.size }; }
 }
 
 export function v2MinuteNow(): number { return Math.floor(Date.now() / 60000); }

@@ -50,15 +50,24 @@ test("robust soft evidence rejects a low-quality outlier frame", () => {
 test("v2 fountain fragments recover out of order with loss and duplicates", () => {
   const minute = 30_000_000; const session = 0x8a4c12ef; const decoder = new V2FountainDecoder();
   const sequence = [4, 4, 5, 9, 1]; let result;
-  for (const index of sequence) result = decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, index), minute));
+  for (const index of sequence) result = decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, index), minute), minute);
   assert.equal(result?.complete, true); assert.deepEqual(result?.secret, SECRET);
 });
 
 test("v2 rejects expired fragments and completed-session replay", () => {
   const minute = 30_000_000; const session = 0x10203040; const decoder = new V2FountainDecoder();
   assert.throws(() => decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 0), minute + 11));
-  for (let sequence = 0; sequence < 4; sequence += 1) decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, sequence), minute));
-  assert.throws(() => decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 4), minute)));
+  for (let sequence = 0; sequence < 4; sequence += 1) decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, sequence), minute), minute);
+  assert.throws(() => decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 4), minute), minute));
+});
+
+test("v2 bounds concurrent sessions and rejects conflicting equations", () => {
+  const minute = 30_000_000; const decoder = new V2FountainDecoder();
+  for (let session = 1; session <= 20; session += 1) decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 0), minute), minute);
+  assert.equal(decoder.diagnostics().activeSessions, 8);
+  const fragment = decodeV2Fragment(encodeV2Fragment(SECRET, 99, minute, 0), minute);
+  decoder.add(fragment, minute); fragment.payload[0] ^= 0xff;
+  assert.throws(() => decoder.add(fragment, minute));
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

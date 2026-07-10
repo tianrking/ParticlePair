@@ -303,7 +303,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
               recovered = decodeParticleCode(bits);
             } catch {
               const fragment = decodeV2Fragment(bits);
-              const progress = v2DecoderRef.current.add(fragment);
+              const progress = v2DecoderRef.current.add(fragment, fragment.issuedMinute);
               v2Rank = progress.rank;
               evidenceRef.current.clear();
               if (progress.complete && progress.secret && progress.secretHex) recovered = {
