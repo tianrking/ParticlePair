@@ -24,7 +24,7 @@
   </p>
 </div>
 
-![Vista previa de ParticlePair](./public/og.png)
+![Vista previa de ParticlePair](./public/readme-preview.png)
 
 > [!IMPORTANT]
 > ParticlePair es un proyecto de **código disponible**, no software de código abierto según la definición de la OSI. No se concede automáticamente ningún derecho comercial. Los productos comerciales, servicios de pago, SDK, hardware, operaciones comerciales internas y cualquier otro uso comercial requieren la autorización escrita y expresa del titular de los derechos o una licencia comercial firmada por separado **antes de su uso**.

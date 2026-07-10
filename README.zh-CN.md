@@ -24,7 +24,7 @@
   </p>
 </div>
 
-![ParticlePair 预览](./public/og.png)
+![ParticlePair 预览](./public/readme-preview.png)
 
 > [!IMPORTANT]
 > ParticlePair 是**源码可用项目**，不是 OSI 定义的开源软件。任何商业权利都不会自动授予；商业产品、付费服务、SDK、硬件、企业内部商业运营及其他商业用途，必须在使用前取得版权所有者的明确书面许可或另行签署商业许可证。

@@ -24,7 +24,7 @@
   </p>
 </div>
 
-![ParticlePair preview](./public/og.png)
+![ParticlePair preview](./public/readme-preview.png)
 
 > [!IMPORTANT]
 > ParticlePair is **source-available**, not OSI open source. No commercial right is granted automatically. Commercial products, paid services, SDKs, hardware, internal commercial operations, and other commercial use require the copyright holder's explicit written authorization or a separate signed commercial license **before use**.
