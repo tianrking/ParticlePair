@@ -96,6 +96,8 @@ export function ParticlePairLab() {
   const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success">("idle");
   const [qualityAuditProgress, setQualityAuditProgress] = useState(0);
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
+  const [calibrationStatus, setCalibrationStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [calibrationFloor, setCalibrationFloor] = useState<number | null>(null);
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -274,6 +276,24 @@ export function ParticlePairLab() {
     setQualityAuditStatus("success");
   };
 
+  const calibrateModulation = async () => {
+    const canvas = particleCanvasRef.current;
+    if (!canvas || !validSecret) return;
+    setCalibrationStatus("running"); setCalibrationFloor(null); setAutoShowcase(false);
+    const candidates = [0.25, 0.32, 0.4, 0.5, 0.62, 0.76, 0.9];
+    let floor: number | null = null;
+    for (const candidate of candidates) {
+      try {
+        const clean = await runRenderedPixelLoopback(canvas, frame, candidate, secretHex, visualMode, "clean");
+        const drift = await runRenderedPixelLoopback(canvas, frame, candidate, secretHex, visualMode, "exposure-drift");
+        if (clean.matchesExpected && drift.matchesExpected && Math.min(clean.quality, drift.quality) >= 0.47) { floor = candidate; break; }
+      } catch { /* Continue to the next stronger modulation candidate. */ }
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    if (floor === null) { setCalibrationStatus("error"); return; }
+    setCalibrationFloor(floor); setStrength(Math.min(1, Number((floor + 0.08).toFixed(2)))); setCalibrationStatus("success");
+  };
+
   const runLoopbackTest = () => {
     setTestStatus("running");
     setTestDetail({ kind: "running" });
@@ -409,6 +429,7 @@ export function ParticlePairLab() {
             />
             <output>{Math.round(strength * 100)}%</output>
           </div>
+          <div className={`adaptive-calibration ${calibrationStatus}`}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
         </div>
       </section>
 

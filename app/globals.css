@@ -86,6 +86,10 @@ main { min-height:100vh; overflow:hidden; }
 .strength-row { display:grid; grid-template-columns:auto 1fr 42px; align-items:center; gap:12px; padding:17px 6px 0; font-size:10px; color:var(--muted); }
 .strength-row input { width:100%; accent-color:var(--ink); }
 .strength-row output { font-family:var(--font-geist-mono),monospace; text-align:right; color:var(--ink); }
+.adaptive-calibration { display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:center; margin-top:9px; padding:9px; border:1px solid rgba(16,19,19,.09); border-radius:13px; background:rgba(255,255,255,.46); }
+.adaptive-calibration button { min-height:30px; padding:0 11px; border:0; border-radius:9px; background:#111419; color:white; cursor:pointer; font:700 7px/1 var(--font-geist-mono),monospace; letter-spacing:.07em; }.adaptive-calibration button:disabled { opacity:.45; cursor:not-allowed; }
+.adaptive-calibration div { min-width:0; display:grid; gap:3px; }.adaptive-calibration span { color:#807b8e; font:650 7px/1 var(--font-geist-mono),monospace; letter-spacing:.08em; }.adaptive-calibration strong { overflow:hidden; color:#292632; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.adaptive-calibration.running button { background:linear-gradient(120deg,var(--mode-a),var(--mode-b),var(--mode-c)); }.adaptive-calibration.success { border-color:color-mix(in srgb,var(--mode-a) 30%,transparent); }.adaptive-calibration.success strong { color:#087b6b; }.adaptive-calibration.error strong { color:#c23862; }
 
 .workspace { max-width:1500px; margin:0 auto; display:grid; grid-template-columns:1.08fr 1fr .82fr; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
 .panel { min-width:0; padding:34px; border-right:1px solid var(--line); background:rgba(255,255,255,.22); }
