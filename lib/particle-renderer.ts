@@ -5,6 +5,7 @@ import {
 } from "./optical-layout";
 import { visualMode, visualModeVariant, type VisualModeId } from "./visual-modes";
 import { drawArtisticScene } from "./artistic-scenes";
+import { deriveVisualDna } from "./visual-dna";
 
 interface Particle {
   angle: number;
@@ -22,6 +23,12 @@ const GALAXY_COLORS = [
   [224, 8, 238],
   [255, 10, 166],
   [255, 16, 122],
+] as const;
+
+const DNA_COLORS = [
+  [255, 38, 185],
+  [104, 54, 255],
+  [255, 104, 42],
 ] as const;
 
 function hexRgb(hex: string): readonly [number, number, number] {
@@ -90,6 +97,7 @@ export function renderParticleFrame({
   reduceDecorativeMotion = false,
 }: ParticleFrameOptions): void {
   const selectedMode = visualMode(mode);
+  const visualDna = deriveVisualDna(cells);
   const structuralVariant = visualModeVariant(mode);
   const phase =
     explicitPhase ?? Math.floor(time / PHASE_DURATION_MS) % 2 === 1;
@@ -134,7 +142,7 @@ export function renderParticleFrame({
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
       0.055 +
-      (positive ? strength : -strength) * 0.3 * borderBoost;
+      (positive ? strength : -strength) * 0.35 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -201,6 +209,33 @@ export function renderParticleFrame({
     context.arc(x, y, particleRadius, 0, Math.PI * 2);
     context.fill();
   }
+
+  // Payload-derived art identity. It is static across opposite phases, sparse,
+  // and chromatically separated from the cyan carrier, so it cancels as common mode.
+  const dnaRandom = mulberry32(visualDna.seed ^ 0x56444e41);
+  const dnaNodes = Array.from({ length: 9 + visualDna.symmetry }, () => ({
+    angle: dnaRandom() * Math.PI * 2,
+    radius: side * (0.13 + dnaRandom() * 0.31),
+    size: side * (0.0025 + dnaRandom() * 0.004),
+  })).sort((left, right) => left.angle - right.angle);
+  context.save();
+  context.globalCompositeOperation = "lighter";
+  context.lineWidth = Math.max(0.65, side * 0.0011);
+  for (let index = 0; index < dnaNodes.length; index += 1) {
+    const node = dnaNodes[index];
+    const next = dnaNodes[(index + 1 + (visualDna.seed % 3)) % dnaNodes.length];
+    const squash = 0.64 + visualDna.chromaShift * 0.16;
+    const x = centerX + Math.cos(node.angle + visualDna.orbitBias * 0.22) * node.radius;
+    const y = centerY + Math.sin(node.angle) * node.radius * squash;
+    const nextX = centerX + Math.cos(next.angle + visualDna.orbitBias * 0.22) * next.radius;
+    const nextY = centerY + Math.sin(next.angle) * next.radius * squash;
+    const color = DNA_COLORS[index % DNA_COLORS.length];
+    context.strokeStyle = `rgba(${color[0]},${color[1]},${color[2]},.045)`;
+    context.beginPath(); context.moveTo(x, y); context.lineTo(nextX, nextY); context.stroke();
+    context.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},.38)`;
+    context.beginPath(); context.arc(x, y, node.size, 0, Math.PI * 2); context.fill();
+  }
+  context.restore();
 
   context.globalCompositeOperation = "source-over";
   const vignette = context.createRadialGradient(

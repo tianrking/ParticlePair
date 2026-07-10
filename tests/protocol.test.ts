@@ -36,8 +36,21 @@ import { cameraConstraintPlan, tuneCameraTrack } from "../lib/camera-tuning";
 import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth } from "../lib/resolution-governor";
 import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 import { analyzePayloadConfidence } from "../lib/payload-confidence";
+import { deriveVisualDna } from "../lib/visual-dna";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("visual DNA is deterministic, payload-sensitive, and bounded", () => {
+  const frame = layoutBits(encodeParticleCode(SECRET));
+  const first = deriveVisualDna(frame); const second = deriveVisualDna(frame);
+  assert.deepEqual(first, second);
+  const changed = [...frame]; changed[91] = !changed[91];
+  assert.notEqual(deriveVisualDna(changed).fingerprint, first.fingerprint);
+  assert.match(first.fingerprint, /^[0-9A-F]{8}$/);
+  assert.ok(first.symmetry >= 3 && first.symmetry <= 8);
+  assert.ok(first.orbitBias >= -1 && first.orbitBias <= 1);
+  assert.ok(first.chromaShift >= 0 && first.chromaShift <= 1);
+});
 
 test("visual laboratory exposes exactly fifty documented unique modes", () => {
   assert.equal(VISUAL_MODES.length, 50);

@@ -32,6 +32,7 @@ import { analyzeVisualModeQuality, scoreVisualDistinctness, visualAuditPasses, t
 import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow, v2SequenceAtTime } from "../lib/protocol-v2";
 import { derivePairingSas, type PairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
+import { deriveVisualDna } from "../lib/visual-dna";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -229,6 +230,7 @@ export function ParticlePairLab() {
     try { return layoutBits(encodeV2Fragment(hexToBytes(secretHex), v2SessionId, v2IssuedMinute, v2Sequence)); }
     catch { return validationFrame; }
   }, [protocolMode, secretHex, v2IssuedMinute, v2Sequence, v2SessionId, validationFrame]);
+  const visualDna = useMemo(() => deriveVisualDna(frame), [frame]);
 
   const selectLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
@@ -530,6 +532,7 @@ export function ParticlePairLab() {
           <div className="mode-intelligence">
             <div className="mode-intelligence-heading"><span>{selectedVisualMode.category}</span><strong>{selectedVisualMode.name}</strong><i>{VISUAL_MODES.findIndex((mode) => mode.id === visualMode) + 1}/50</i></div>
             <div className="mode-palette" aria-label="Mode color palette">{selectedVisualMode.colors.map((color) => <span key={color} style={{ backgroundColor: color }} />)}</div>
+            <div className="visual-dna" aria-label={`Visual DNA ${visualDna.label} ${visualDna.fingerprint}`}><span>VISUAL DNA</span><strong>{visualDna.label}</strong><code>{visualDna.fingerprint}</code><small>{visualDna.symmetry}-fold topology · payload-derived · not authentication</small></div>
             <dl><div><dt>GENERATIVE ALGORITHM</dt><dd>{selectedVisualMode.algorithm}</dd></div><div><dt>CAMERA EXTRACTION</dt><dd>{selectedVisualMode.extraction}</dd></div><div><dt>ROBUSTNESS</dt><dd>{selectedVisualMode.robustness}</dd></div></dl>
           </div>
           <div className="strength-row">
@@ -610,7 +613,7 @@ export function ParticlePairLab() {
           <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
           <div className={`visual-audit ${qualityAuditStatus}`} role="status" aria-live="polite" aria-busy={qualityAuditStatus === "running"}>
             <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" || qualityAuditStatus === "error" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG · ${Math.min(...Object.values(visualGrades).map((grade) => grade.distinctness))} D` : "PIXEL METRICS PENDING"}</strong></div>
-            <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · ${grade.grade}` : ""}`} className={grade ? grade.grade >= 70 ? "excellent" : grade.grade >= 55 ? "good" : "review" : ""} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}`}>{grade?.grade ?? "·"}</button>; })}</div>
+            <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; const tier = grade ? grade.grade >= 70 && grade.distinctness >= 60 ? "excellent" : grade.grade >= 60 && grade.distinctness >= 40 ? "good" : "review" : ""; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · Q${grade.grade} · D${grade.distinctness}` : ""}`} className={tier} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}${grade ? ` distinctness ${grade.distinctness}` : ""}`}>{grade?.grade ?? "·"}</button>; })}</div>
             {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>DISTINCT</dt><dd>{visualGrades[visualMode].distinctness}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
           </div>
           <button className="diagnostic-export" type="button" onClick={exportDiagnosticReport}><span>↓</span><div><strong>EXPORT LOCAL DIAGNOSTIC</strong><small>Redacted JSON · no secret · no camera frames</small></div></button>
@@ -653,7 +656,7 @@ export function ParticlePairLab() {
           <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} renderQuality={renderQuality} />
           <div className="immersive-glass" aria-hidden="true" />
           <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button ref={immersiveCloseRef} type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
-          <div className="immersive-meta"><span>{selectedVisualMode.category}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
+          <div className="immersive-meta"><span>{selectedVisualMode.category} · {visualDna.label} · {visualDna.fingerprint}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
           <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><div><span className="live-dot" />TRANSMITTING · PHASE 300 MS · CRC-16</div><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
           <div className="immersive-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
         </section>
