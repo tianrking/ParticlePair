@@ -1,9 +1,13 @@
 <div align="center">
   <img src="./public/favicon.png" width="88" alt="ParticlePair mark" />
   <h1>ParticlePair</h1>
-  <p><strong>Human-visible particle cloud. Machine-decodable pairing structure.</strong></p>
-  <p>Experimental optical out-of-band pairing for screens and cameras.</p>
-  <p><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
+  <p><strong>Pairing, hidden in motion.</strong></p>
+  <p>A vivid rotating galaxy for people. A verifiable optical frame for cameras.</p>
+
+  <p>
+    <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/Language-English-111827?style=for-the-badge" /></a>
+    <a href="./README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/语言-简体中文-0F766E?style=for-the-badge" /></a>
+  </p>
 
   <p>
     <a href="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
@@ -14,15 +18,6 @@
   </p>
 
   <p>
-    <a href="https://nextjs.org/"><img alt="Next.js 16.2" src="https://img.shields.io/badge/Next.js-16.2-000000?style=flat-square&amp;logo=nextdotjs&amp;logoColor=white" /></a>
-    <a href="https://react.dev/"><img alt="React 19.2" src="https://img.shields.io/badge/React-19.2-149ECA?style=flat-square&amp;logo=react&amp;logoColor=white" /></a>
-    <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.9" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=flat-square&amp;logo=typescript&amp;logoColor=white" /></a>
-    <a href="https://vite.dev/"><img alt="Vite 8.1" src="https://img.shields.io/badge/Vite-8.1-646CFF?style=flat-square&amp;logo=vite&amp;logoColor=white" /></a>
-    <a href="https://workers.cloudflare.com/"><img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=flat-square&amp;logo=cloudflareworkers&amp;logoColor=white" /></a>
-    <a href="https://nodejs.org/"><img alt="Node.js 22.13 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522.13-339933?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white" /></a>
-  </p>
-
-  <p>
     <a href="https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Ftianrking%2FParticlePair&amp;project-name=particle-pair&amp;repository-name=particle-pair"><img src="https://vercel.com/button" alt="Deploy with Vercel" /></a>
   </p>
 </div>
@@ -30,24 +25,54 @@
 ![ParticlePair preview](./public/og.png)
 
 > [!IMPORTANT]
-> ParticlePair is **source-available**, not OSI open source. The deploy button does not grant commercial rights. Commercial products, paid services, SDKs, hardware, or other commercial use require a separate written license.
+> ParticlePair is **source-available**, not OSI open source. No commercial right is granted automatically. Commercial products, paid services, SDKs, hardware, internal commercial operations, and other commercial use require the copyright holder's explicit written authorization or a separate signed commercial license **before use**.
 
 ## Overview
 
-ParticlePair encodes a 128-bit one-time pairing secret into an animated particle cloud. A camera receiver compares opposite modulation phases, extracts a machine-readable grid, corrects limited bit errors, and releases the secret only after integrity validation.
+ParticlePair encodes a 128-bit one-time pairing secret inside a vivid three-arm particle galaxy. The visual layer uses saturated blue, violet, and magenta particles, while a green-heavy cyan carrier gives the camera a separately decodable optical channel. The receiver compares opposite modulation phases, extracts a machine-readable grid, corrects limited bit errors, and releases the secret only after integrity validation.
 
 The visual is meant to feel ambient to a person while remaining structurally decodable by software. The project is an independent research prototype; it is not an implementation of, compatible with, or affiliated with Apple Watch pairing.
 
-**Navigate:** [How it works](#how-it-works) · [Quick start](#quick-start) · [LAN access](#lan-access) · [Deploy](#deploy) · [Protocol](#particle-code-v1) · [Security](#security-model)
+**Navigate:** [Technology](#technology-stack) · [How it works](#how-it-works) · [Quick start](#quick-start) · [Camera scan](#two-device-camera-scan) · [Protocol](#particle-code-v1) · [Security](#security-model) · [Commercial licensing](#license-and-commercial-use)
 
-## Technical palette
+## Technology stack
 
-![Canvas 2D](https://img.shields.io/badge/Canvas-2D-FF6B35?style=flat-square)
-![Web Crypto](https://img.shields.io/badge/Web-Crypto-14B8A6?style=flat-square)
-![getUserMedia](https://img.shields.io/badge/Camera-getUserMedia-0EA5E9?style=flat-square)
-![Hamming 12,8](https://img.shields.io/badge/FEC-Hamming%2812%2C8%29-8B5CF6?style=flat-square)
-![CRC-16](https://img.shields.io/badge/Integrity-CRC--16-D97706?style=flat-square)
-![Particle Code v1](https://img.shields.io/badge/Protocol-Particle%20Code%20v1-DB2777?style=flat-square)
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16.2-000000?style=for-the-badge&amp;logo=nextdotjs&amp;logoColor=white" /><br />
+      <img alt="React" src="https://img.shields.io/badge/React-19.2-149ECA?style=for-the-badge&amp;logo=react&amp;logoColor=white" /><br />
+      <sub><strong>Web runtime</strong><br />App Router · SSR · responsive UI</sub>
+    </td>
+    <td align="center" width="33%">
+      <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&amp;logo=typescript&amp;logoColor=white" /><br />
+      <img alt="Vite" src="https://img.shields.io/badge/Vite-8.1-646CFF?style=for-the-badge&amp;logo=vite&amp;logoColor=white" /><br />
+      <sub><strong>Language &amp; build</strong><br />Strict types · Vinext · dual builds</sub>
+    </td>
+    <td align="center" width="33%">
+      <img alt="Canvas 2D" src="https://img.shields.io/badge/Canvas-2D-FF6B35?style=for-the-badge" /><br />
+      <img alt="getUserMedia" src="https://img.shields.io/badge/Camera-getUserMedia-0284C7?style=for-the-badge" /><br />
+      <sub><strong>Optical runtime</strong><br />Galaxy renderer · camera frame sampling</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img alt="Web Crypto" src="https://img.shields.io/badge/Web-Crypto-0F766E?style=for-the-badge" /><br />
+      <img alt="128-bit secret" src="https://img.shields.io/badge/Secret-128--bit-115E59?style=for-the-badge" /><br />
+      <sub><strong>Secret material</strong><br />Client-generated · never server-rendered</sub>
+    </td>
+    <td align="center">
+      <img alt="Hamming 12,8" src="https://img.shields.io/badge/FEC-Hamming%2812%2C8%29-7C3AED?style=for-the-badge" /><br />
+      <img alt="CRC-16" src="https://img.shields.io/badge/Integrity-CRC--16-D97706?style=for-the-badge" /><br />
+      <sub><strong>Framing &amp; integrity</strong><br />Particle Code v1 · guarded release</sub>
+    </td>
+    <td align="center">
+      <img alt="Vercel" src="https://img.shields.io/badge/Vercel-Ready-000000?style=for-the-badge&amp;logo=vercel&amp;logoColor=white" /><br />
+      <img alt="Cloudflare Workers" src="https://img.shields.io/badge/Cloudflare-Workers-F38020?style=for-the-badge&amp;logo=cloudflareworkers&amp;logoColor=white" /><br />
+      <sub><strong>Deployment</strong><br />Native Next.js · Worker/Sites</sub>
+    </td>
+  </tr>
+</table>
 
 | Layer | Current implementation |
 | --- | --- |
@@ -55,9 +80,9 @@ The visual is meant to feel ambient to a person while remaining structurally dec
 | Packet | 21 bytes, including header and CRC-16 |
 | Error correction | Hamming(12,8), one correctable bit per codeword |
 | Optical layout | 252 encoded bits in an 18×18 grid |
-| Modulation | Opposite luminance phases, 300 ms per phase |
-| Rendering | Canvas 2D animated particle cloud |
-| Receiver | `getUserMedia()` + frame differencing + sync correlation |
+| Modulation | Opposite green-heavy cyan carrier phases, 300 ms per phase |
+| Rendering | Canvas 2D, 1,050-particle three-arm animated galaxy |
+| Receiver | `getUserMedia()` + green-channel frame differencing + sync correlation |
 | Deployment | Cloudflare Worker/Sites and native Next.js on Vercel |
 
 ## Important notice
@@ -78,14 +103,14 @@ The visual is meant to feel ambient to a person while remaining structurally dec
           │
           ▼  252 bits mapped into an 18×18 grid
           │
-          ▼  opposite luminance phases inside a particle cloud
+          ▼  opposite cyan carrier phases inside a vivid galaxy
           │
-          ▼  camera frame differencing
+          ▼  green-channel camera frame differencing
           │
           └─ sync → decode → correct → CRC verify → release secret
 ```
 
-A person mainly sees particles rotating, breathing, gathering, and dispersing. The receiver subtracts two opposite-phase frames to suppress the static scene and much of the global exposure offset. An asymmetric border pattern identifies the differential sign; the inner cells carry the encoded payload.
+A person sees 1,050 saturated particles rotating through three spiral arms, breathing, gathering, and dispersing. The blue/violet/magenta galaxy is deliberately separated from the green-heavy cyan optical carrier. The receiver subtracts two opposite-phase green-channel frames to suppress the decorative scene and much of the global exposure offset. An asymmetric border pattern identifies the differential sign; the inner cells carry the encoded payload.
 
 ## Features
 
@@ -93,7 +118,8 @@ A person mainly sees particles rotating, breathing, gathering, and dispersing. T
 - Encode a 21-byte Particle Code v1 packet.
 - Validate with CRC-16/CCITT-FALSE.
 - Correct one bit in each Hamming(12,8) codeword.
-- Render an 18×18 optical grid as an animated Canvas 2D particle cloud.
+- Render an 18×18 optical grid behind a vivid 1,050-particle, three-arm Canvas 2D galaxy.
+- Separate the red/blue visual galaxy from the green-heavy cyan camera carrier.
 - Decode from a browser camera with timestamped video-frame pairing, multi-scale crop search, rotation/mirror recovery, soft evidence accumulation, exposure-drift cancellation, and sync correlation.
 - Render deterministic opposite-phase PNGs for a platform-independent Canvas pixel loopback test.
 - Run a local loopback test with injected errors in independent codewords.
@@ -229,14 +255,14 @@ npm test
 npm run build:vercel
 ```
 
-`npm test` covers clean encode/decode round trips, correction across independent Hamming codewords, CRC rejection beyond the correction budget, the Cloudflare/Sites production build, and server-rendered product-shell checks. The final command verifies the native Next.js path used by Vercel.
+`npm test` covers carrier/color separation, clean encode/decode round trips, correction across independent Hamming codewords, CRC rejection beyond the correction budget, the Cloudflare/Sites production build, and server-rendered product-shell checks. The final command verifies the native Next.js path used by Vercel.
 
 ## Known limitations
 
 - No automatic code-boundary detection or perspective correction.
 - Scale and offset search are bounded; the complete code must remain inside the guide.
 - No automatic screen color-space, camera white-balance, or refresh-rate calibration.
-- Decorative particle motion still introduces differential noise.
+- Camera color crosstalk can leak a small amount of the red/blue decorative galaxy into the green carrier channel.
 - Hamming correction is limited to one bit per codeword.
 - No timestamps, session binding, consumed-secret state, or replay prevention.
 - Extreme rolling shutter, PWM, or exposure changes can still exceed the correction budget.
@@ -274,9 +300,9 @@ Compatibility tests, research references, issue reports, and reproducible measur
 
 Copyright © 2026 tianrking.
 
-The code is provided under the [PolyForm Noncommercial License 1.0.0](./LICENSE). It permits covered noncommercial research, learning, experimentation, modification, and redistribution under its terms. It does not grant use in commercial products, paid services, commercial hardware, commercial SDKs, or other commercial activity.
+The code is provided under the [PolyForm Noncommercial License 1.0.0](./LICENSE). It permits covered noncommercial research, learning, experimentation, modification, and redistribution under its terms. It does **not** grant use in commercial products, paid services, revenue-generating client work, internal commercial operations, commercial hardware, commercial SDKs, or other commercial activity.
 
-Preserve [NOTICE](./NOTICE). For commercial rights, see [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md). The license text controls if this summary differs from it.
+Commercial use requires explicit written permission from the copyright holder or a separate commercial license identifying the licensee and permitted scope. A fork, deployment, issue response, pull request, repository access, or silence is not permission. Preserve [NOTICE](./NOTICE), then read [COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) before making a commercial inquiry. The license text controls if this summary differs from it.
 
 ## Research references
 
