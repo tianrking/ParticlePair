@@ -22,6 +22,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "constellation", name: "Constellation Key", subtitle: "Connected anchor stars", kind: "nodes", colors: ["#ffffff", "#77d8ff", "#a98cff"], icon: "⌁" },
   { id: "jellyfish", name: "Bioluminescent", subtitle: "Jellyfish pulse paths", kind: "tendrils", colors: ["#42fff3", "#557dff", "#dc61ff"], icon: "♆" },
   { id: "ink", name: "Ink Diffusion", subtitle: "Chromatic fluid clouds", kind: "clouds", colors: ["#ff3cac", "#784ba0", "#2b86c5"], icon: "◌" },
+  { id: "weave", name: "Weave Protocol", subtitle: "Luminous cipher threads", kind: "weave", colors: ["#2ee8df", "#ff6f8f", "#ffd166"], icon: "⌘" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
