@@ -5,6 +5,7 @@ import {
   type DifferentialFrameAnalysis,
 } from "./optical-decoder";
 import { renderParticleFrame } from "./particle-renderer";
+import type { VisualModeId } from "./visual-modes";
 
 interface CapturedCanvasFrame {
   preview: HTMLCanvasElement;
@@ -28,6 +29,7 @@ function renderPhaseFrame(
   cells: readonly boolean[],
   strength: number,
   time: number,
+  mode: VisualModeId,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, source.width);
@@ -43,6 +45,7 @@ function renderPhaseFrame(
     strength,
     time,
     width: canvas.width,
+    mode,
   });
   return canvas;
 }
@@ -158,14 +161,15 @@ export async function runRenderedPixelLoopback(
   cells: readonly boolean[],
   strength: number,
   expectedSecretHex: string,
+  mode: VisualModeId = "galaxy",
 ): Promise<RenderedPixelLoopbackResult> {
   const reference = captureCanvasFrame(
-    renderPhaseFrame(canvas, cells, strength, 1200),
+    renderPhaseFrame(canvas, cells, strength, 1200, mode),
   );
   const current = captureCanvasFrame(
     // This now exercises the same 300 ms separation as a physical camera. The
     // decoration must cancel because its motion is phase-paired by the renderer.
-    renderPhaseFrame(canvas, cells, strength, 1500),
+    renderPhaseFrame(canvas, cells, strength, 1500, mode),
   );
   const { analysis, decoded } = decodeDifferentialFrames(
     current.values,

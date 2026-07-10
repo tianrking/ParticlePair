@@ -20,8 +20,20 @@ import {
 } from "../lib/optical-decoder";
 import { rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
+import { VISUAL_MODES } from "../lib/visual-modes";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("visual laboratory exposes exactly fifty documented unique modes", () => {
+  assert.equal(VISUAL_MODES.length, 50);
+  assert.equal(new Set(VISUAL_MODES.map((mode) => mode.id)).size, 50);
+  for (const mode of VISUAL_MODES) {
+    assert.ok(mode.algorithm.length > 24, `${mode.id} needs an algorithm explanation`);
+    assert.ok(mode.extraction.length > 24, `${mode.id} needs a camera extraction explanation`);
+    assert.ok(mode.robustness.length > 24, `${mode.id} needs a robustness explanation`);
+    assert.equal(mode.colors.length, 3);
+  }
+});
 
 test("cyan carrier is separated from vivid galaxy colors", () => {
   const carrier = opticalPixelValue(35, 255, 218);

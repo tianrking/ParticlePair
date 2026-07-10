@@ -24,6 +24,11 @@ const GALAXY_COLORS = [
   [255, 16, 122],
 ] as const;
 
+function hexRgb(hex: string): readonly [number, number, number] {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return [value >> 16, (value >> 8) & 255, value & 255];
+}
+
 function mulberry32(seed: number): () => number {
   return () => {
     seed |= 0;
@@ -152,8 +157,9 @@ export function renderParticleFrame({
   }
 
   const rotation = time * 0.000075;
-  for (const particle of PARTICLES) {
+  for (let particleIndex = 0; particleIndex < PARTICLES.length; particleIndex += 1) {
     if (selectedMode.kind !== "galaxy") break;
+    const particle = PARTICLES[particleIndex];
     const wave =
       Math.sin(time * 0.00028 + particle.angle * 2.6) *
       (0.016 + (1 - particle.depth) * 0.018);
@@ -170,7 +176,9 @@ export function renderParticleFrame({
     const shimmer =
       (0.52 + Math.sin(time * 0.00082 + particle.angle * 8.5) * 0.17) *
       (0.62 + particle.depth * 0.48);
-    const [red, green, blue] = particle.color;
+    const [red, green, blue] = selectedMode.id === "galaxy"
+      ? particle.color
+      : hexRgb(selectedMode.colors[particleIndex % selectedMode.colors.length]);
     const particleRadius =
       particle.size * pixelRatio * (0.72 + particle.depth * 1.18);
 

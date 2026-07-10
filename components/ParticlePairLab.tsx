@@ -24,9 +24,10 @@ import {
   UI_COPY,
   type Language,
 } from "../lib/i18n";
-import { VISUAL_MODES, type VisualModeId } from "../lib/visual-modes";
+import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
+const MODE_STORAGE_KEY = "particlepair-visual-mode";
 
 type TestStatus = "idle" | "running" | "success" | "error";
 type LoopDetail =
@@ -80,6 +81,12 @@ export function ParticlePairLab() {
   const [strength, setStrength] = useState(0.9);
   const [paused, setPaused] = useState(false);
   const [visualMode, setVisualMode] = useState<VisualModeId>("galaxy");
+  const [modeQuery, setModeQuery] = useState("");
+  const [modeCategory, setModeCategory] = useState<"All" | VisualCategory>("All");
+  const [autoShowcase, setAutoShowcase] = useState(false);
+  const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [matrixProgress, setMatrixProgress] = useState(0);
+  const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -98,6 +105,8 @@ export function ParticlePairLab() {
         if (isLanguage(savedLanguage)) {
           setLanguage(savedLanguage);
         }
+        const savedMode = window.localStorage.getItem(MODE_STORAGE_KEY);
+        if (savedMode && VISUAL_MODES.some((mode) => mode.id === savedMode)) setVisualMode(savedMode);
       } catch {
         // Language persistence is optional when storage is blocked.
       }
@@ -105,6 +114,17 @@ export function ParticlePairLab() {
 
     return () => window.cancelAnimationFrame(initializationFrame);
   }, []);
+
+  useEffect(() => {
+    if (!autoShowcase) return;
+    const interval = window.setInterval(() => {
+      setVisualMode((current) => {
+        const index = VISUAL_MODES.findIndex((mode) => mode.id === current);
+        return VISUAL_MODES[(index + 1) % VISUAL_MODES.length].id;
+      });
+    }, 4200);
+    return () => window.clearInterval(interval);
+  }, [autoShowcase]);
 
   useEffect(() => {
     const option = LANGUAGE_OPTIONS.find(({ code }) => code === language);
@@ -139,6 +159,18 @@ export function ParticlePairLab() {
   };
 
   const validSecret = /^[0-9a-f]{32}$/i.test(secretHex);
+  const selectedVisualMode = getVisualMode(visualMode);
+  const filteredModes = VISUAL_MODES.filter((mode) => {
+    const categoryMatches = modeCategory === "All" || mode.category === modeCategory;
+    const query = modeQuery.trim().toLowerCase();
+    return categoryMatches && (!query || `${mode.name} ${mode.subtitle} ${mode.category}`.toLowerCase().includes(query));
+  });
+
+  const selectVisualMode = (mode: VisualModeId) => {
+    setVisualMode(mode);
+    setAutoShowcase(false);
+    try { window.localStorage.setItem(MODE_STORAGE_KEY, mode); } catch { /* Persistence is optional. */ }
+  };
 
   const runPixelLoopbackTest = async () => {
     const canvas = particleCanvasRef.current;
@@ -149,7 +181,7 @@ export function ParticlePairLab() {
     setPixelResult(null);
 
     try {
-      const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex);
+      const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, visualMode);
       setPixelResult(decoded);
       setResult({
         correctedCodewords: decoded.correctedCodewords,
@@ -173,6 +205,24 @@ export function ParticlePairLab() {
       setPixelTestStatus("error");
       setPixelTestDetail({ kind: "error" });
     }
+  };
+
+  const runModeMatrix = async () => {
+    const canvas = particleCanvasRef.current;
+    if (!canvas || !validSecret) return;
+    setMatrixStatus("running"); setMatrixProgress(0); setMatrixFailures([]); setAutoShowcase(false);
+    const failures: string[] = [];
+    for (let index = 0; index < VISUAL_MODES.length; index += 1) {
+      const mode = VISUAL_MODES[index];
+      try {
+        const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, mode.id);
+        if (!decoded.matchesExpected) failures.push(mode.name);
+      } catch { failures.push(mode.name); }
+      setMatrixProgress(index + 1);
+      if (index % 4 === 3) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    setMatrixFailures(failures);
+    setMatrixStatus(failures.length ? "error" : "success");
   };
 
   const runLoopbackTest = () => {
@@ -277,12 +327,23 @@ export function ParticlePairLab() {
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
           </div>
+          <div className="mode-toolbar">
+            <label><span>SEARCH MODES</span><input value={modeQuery} onChange={(event) => setModeQuery(event.target.value)} placeholder="Galaxy, organic, glyph…" /></label>
+            <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP SHOWCASE" : "AUTO SHOWCASE"}</button>
+          </div>
+          <div className="mode-categories" aria-label="Mode categories">
+            {VISUAL_CATEGORIES.map((category) => <button key={category} type="button" className={modeCategory === category ? "is-active" : ""} onClick={() => setModeCategory(category)}>{category}</button>)}
+          </div>
           <div className="mode-picker" aria-label="Visual transmission mode">
-            {VISUAL_MODES.map((mode) => (
-              <button key={mode.id} type="button" className={visualMode === mode.id ? "is-active" : ""} onClick={() => setVisualMode(mode.id)} aria-pressed={visualMode === mode.id}>
+            {filteredModes.map((mode) => (
+              <button key={mode.id} type="button" className={visualMode === mode.id ? "is-active" : ""} onClick={() => selectVisualMode(mode.id)} aria-pressed={visualMode === mode.id}>
                 <span>{mode.icon}</span><strong>{mode.name}</strong><small>{mode.subtitle}</small>
               </button>
             ))}
+          </div>
+          <div className="mode-intelligence">
+            <div className="mode-intelligence-heading"><span>{selectedVisualMode.category}</span><strong>{selectedVisualMode.name}</strong><i>{VISUAL_MODES.findIndex((mode) => mode.id === visualMode) + 1}/50</i></div>
+            <dl><div><dt>GENERATIVE ALGORITHM</dt><dd>{selectedVisualMode.algorithm}</dd></div><div><dt>CAMERA EXTRACTION</dt><dd>{selectedVisualMode.extraction}</dd></div><div><dt>ROBUSTNESS</dt><dd>{selectedVisualMode.robustness}</dd></div></dl>
           </div>
           <div className="strength-row">
             <label htmlFor="strength">{copy.modulationStrength}</label>
@@ -348,6 +409,10 @@ export function ParticlePairLab() {
               </div>
             ) : null}
           </div>
+          <button className="secondary-button full-width matrix-button" type="button" disabled={!validSecret || matrixStatus === "running" || paused} onClick={runModeMatrix}>
+            {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
+          </button>
+          <div className={`matrix-result ${matrixStatus}`}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
         </article>
 
         <article className="panel receiver-panel">
