@@ -24,6 +24,7 @@ import { VISUAL_MODES } from "../lib/visual-modes";
 import { derivePairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
+import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, type PerspectiveQuad } from "../lib/perspective-sampling";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -88,6 +89,28 @@ test("diagnostic report is explicitly redacted", () => {
   const report = buildDiagnosticReport({ createdAt: "2026-01-01T00:00:00.000Z", device: { deviceMemoryGiB: 8, hardwareConcurrency: 8, pixelRatio: 2, viewport: { height: 800, width: 1200 } }, transmitter: { modulationStrength: 0.8, protocolVersion: 2, renderQuality: "ultra", v2DwellMs: 900, visualMode: "galaxy" }, verification: { modeMatrix: "pass" } });
   const serialized = JSON.stringify(report);
   assert.equal(report.privacy.secretIncluded, false); assert.equal(report.privacy.sessionIdIncluded, false); assert.equal(report.privacy.cameraFramesIncluded, false); assert.doesNotMatch(serialized, /[0-9a-f]{32}/i);
+});
+
+test("homography sampling recovers an 18 by 18 trapezoid", () => {
+  const width = 220; const height = 190; const pixels = new Uint8ClampedArray(width * height * 4); const quad: PerspectiveQuad = { topLeft: { x: 42, y: 18 }, topRight: { x: 178, y: 31 }, bottomRight: { x: 207, y: 171 }, bottomLeft: { x: 13, y: 156 } };
+  const expected = Array.from({ length: CELL_COUNT }, (_, index) => (index * 7 + Math.floor(index / 18) * 31) % 256);
+  expected.forEach((value, index) => { const point = projectUnitPoint(quad, (index % 18 + 0.5) / 18, (Math.floor(index / 18) + 0.5) / 18); const centerX = Math.round(point.x); const centerY = Math.round(point.y); for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) { const offset = ((centerY + dy) * width + centerX + dx) * 4; pixels[offset + 1] = value; pixels[offset + 3] = 255; } });
+  const sampled = samplePerspectiveGrid(pixels, width, height, quad, 18);
+  assert.ok(sampled.every((value, index) => Math.abs(value - expected[index]) < 1));
+});
+
+test("perspective samples still pass sync, orientation, and payload decode", () => {
+  const width = 220; const height = 190; const quad: PerspectiveQuad = { topLeft: { x: 42, y: 18 }, topRight: { x: 178, y: 31 }, bottomRight: { x: 207, y: 171 }, bottomLeft: { x: 13, y: 156 } }; const cells = layoutBits(encodeParticleCode(SECRET));
+  const paint = (values: readonly number[]) => { const pixels = new Uint8ClampedArray(width * height * 4); values.forEach((value, index) => { const point = projectUnitPoint(quad, (index % 18 + 0.5) / 18, (Math.floor(index / 18) + 0.5) / 18); const x = Math.round(point.x); const y = Math.round(point.y); for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) { const offset = ((y + dy) * width + x + dx) * 4; pixels[offset + 1] = value; pixels[offset + 3] = 255; } }); return pixels; };
+  const current = samplePerspectiveGrid(paint(cells.map((cell) => cell ? 121 : 37)), width, height, quad, 18); const reference = samplePerspectiveGrid(paint(cells.map((cell) => cell ? 28 : 112)), width, height, quad, 18);
+  const ranked = rankOpticalFrameAnalyses({ candidates: [{ key: "perspective", values: current }], timestamp: 300 }, { candidates: [{ key: "perspective", values: reference }], timestamp: 0 });
+  const decoded = decodeParticleCode(extractPayloadBits(ranked[0].analysis.cells)); assert.deepEqual(decoded.secret, SECRET); assert.ok(ranked[0].analysis.quality > 0.9);
+});
+
+test("hierarchical perspective search stays inside the mobile candidate budget", () => {
+  const crops = guideCropCandidates({ x: 0, y: 0, width: 1280, height: 720 });
+  const candidateCount = crops.reduce((sum, crop) => sum + perspectiveCandidatesForCrop(crop.key, 36).length, 0);
+  assert.equal(crops.length, 25); assert.equal(candidateCount, 61); assert.ok(candidateCount < 75);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

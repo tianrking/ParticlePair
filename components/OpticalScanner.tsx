@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  CELL_COUNT,
   extractPayloadBits,
   GRID_SIZE,
   PHASE_DURATION_MS,
@@ -17,7 +16,7 @@ import {
   guideCropCandidates,
   objectFitCoverSourceRectangle,
 } from "../lib/camera-geometry";
-import { opticalPixelValue } from "../lib/optical-color";
+import { perspectiveCandidatesForCrop, samplePerspectiveGrid } from "../lib/perspective-sampling";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
@@ -44,6 +43,7 @@ const PHASE_TOLERANCE_MS = 120;
 const MAX_ACCUMULATED_FRAMES = 5;
 const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
+const PERSPECTIVE_PATCH_SIZE = 36;
 
 function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
@@ -84,8 +84,8 @@ function sampleVideoCandidates(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
 ): OpticalSampleCandidate[] {
-  canvas.width = GRID_SIZE;
-  canvas.height = GRID_SIZE;
+  canvas.width = PERSPECTIVE_PATCH_SIZE;
+  canvas.height = PERSPECTIVE_PATCH_SIZE;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return [];
 
@@ -107,27 +107,19 @@ function sampleVideoCandidates(
       crop.side,
       0,
       0,
-      GRID_SIZE,
-      GRID_SIZE,
+      PERSPECTIVE_PATCH_SIZE,
+      PERSPECTIVE_PATCH_SIZE,
     );
 
     const pixels = context.getImageData(
       0,
       0,
-      GRID_SIZE,
-      GRID_SIZE,
+      PERSPECTIVE_PATCH_SIZE,
+      PERSPECTIVE_PATCH_SIZE,
     ).data;
-    const values = Array.from({ length: CELL_COUNT }, (_, index) => {
-      const pixelOffset = index * 4;
-      return opticalPixelValue(
-        pixels[pixelOffset],
-        pixels[pixelOffset + 1],
-        pixels[pixelOffset + 2],
-      );
-    });
-    candidates.push({
-      key: crop.key,
-      values,
+    for (const perspective of perspectiveCandidatesForCrop(crop.key, PERSPECTIVE_PATCH_SIZE)) candidates.push({
+      key: `${crop.key}:${perspective.key}`,
+      values: samplePerspectiveGrid(pixels, PERSPECTIVE_PATCH_SIZE, PERSPECTIVE_PATCH_SIZE, perspective.quad, GRID_SIZE),
     });
   }
 
@@ -400,6 +392,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
+        <span className="perspective-label">HOMOGRAPHY · 61 CANDIDATES</span>
         <div
           className="scan-quality"
           role="progressbar"

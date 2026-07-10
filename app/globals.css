@@ -193,6 +193,7 @@ main { min-height:100vh; overflow:hidden; }
 .scan-quality { position:absolute; left:0; right:0; bottom:0; height:3px; background:rgba(255,255,255,.08); }
 .scan-quality span { display:block; height:100%; background:var(--cyan); transition:width .12s; }
 .scan-quality-label { position:absolute; top:9px; right:10px; padding:4px 6px; background:rgba(4,9,12,.66); color:rgba(232,249,249,.8); font-family:var(--font-geist-mono),monospace; font-size:7px; letter-spacing:.08em; }
+.perspective-label { position:absolute; left:10px; bottom:9px; padding:4px 6px; border:1px solid rgba(68,255,224,.13); border-radius:999px; background:rgba(4,9,12,.66); color:rgba(109,255,232,.68); font:600 6px/1 var(--font-geist-mono),monospace; letter-spacing:.07em; backdrop-filter:blur(8px); }
 .scanner-message { min-height:14px; margin:0; color:var(--muted); font-size:10px; text-align:center; }
 
 .decoded-panel { display:flex; flex-direction:column; }
