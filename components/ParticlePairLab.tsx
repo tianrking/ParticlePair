@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- These are client-generated PNG evidence frames, not network assets. */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ParticleCloud } from "./ParticleCloud";
 import { OpticalScanner } from "./OpticalScanner";
 import { extractPayloadBits, isBorderCell, layoutBits } from "../lib/optical-layout";
@@ -323,7 +323,7 @@ export function ParticlePairLab() {
           </div>
         </div>
 
-        <div className="transmitter-card">
+        <div className="transmitter-card" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
           <div className="card-heading">
             <div><span className="section-index">01</span><h2>{copy.broadcastTitle}</h2></div>
             <button
@@ -351,7 +351,7 @@ export function ParticlePairLab() {
           </div>
           <div className="mode-picker" aria-label="Visual transmission mode">
             {filteredModes.map((mode) => (
-              <button key={mode.id} type="button" className={visualMode === mode.id ? "is-active" : ""} onClick={() => selectVisualMode(mode.id)} aria-pressed={visualMode === mode.id}>
+              <button key={mode.id} type="button" className={visualMode === mode.id ? "is-active" : ""} style={{ "--tile-a": mode.colors[0], "--tile-b": mode.colors[1], "--tile-c": mode.colors[2] } as CSSProperties} onClick={() => selectVisualMode(mode.id)} aria-pressed={visualMode === mode.id}>
                 <span>{mode.icon}</span><strong>{mode.name}</strong><small>{mode.subtitle}</small>
               </button>
             ))}
@@ -463,7 +463,7 @@ export function ParticlePairLab() {
 
       <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>ORBITACERO · PARTICLEPAIR · 2026</span></footer>
       {immersive ? (
-        <section className="immersive-stage" role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
+        <section className="immersive-stage" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties} role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
           <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} />
           <div className="immersive-glass" aria-hidden="true" />
           <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE GENERATIVE OPTICAL LINK</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
