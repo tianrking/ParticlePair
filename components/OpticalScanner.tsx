@@ -168,9 +168,10 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
 
     if (typeof video.requestVideoFrameCallback === "function") {
       schedulerRef.current = "video";
-      frameRef.current = video.requestVideoFrameCallback((now, metadata) => {
-        const mediaTimestamp = metadata.mediaTime * 1000;
-        sample(Number.isFinite(mediaTimestamp) ? mediaTimestamp : now);
+      frameRef.current = video.requestVideoFrameCallback((now) => {
+        // Use WebKit's monotonic callback clock. mediaTime is not reliable for
+        // every live MediaStream implementation and can remain at zero on iOS.
+        sample(now);
       });
     } else {
       schedulerRef.current = "animation";
@@ -289,6 +290,8 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
       } else {
         setMessage(`同步质量 ${percent}% · 请将完整方框缩放到取景框内`);
       }
+    } else {
+      setMessage("已收到相机画面 · 正在同步300ms相反相位…");
     }
 
     scheduleNextFrame();
