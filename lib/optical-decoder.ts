@@ -12,8 +12,15 @@ export interface DifferentialFrameAnalysis {
   differences: number[];
   exposureShift: number;
   orientation: 1 | -1;
+  rawSyncCorrelation: number;
   quality: number;
 }
+
+// The camera searches 15 crops in all 8 square symmetries. Taking the best of
+// 120 sign correlations gives unrelated images a repeatable 30–40% apparent
+// match. Treat correlations up to 50% as the multiple-candidate noise floor so
+// the public quality value represents evidence above chance, not raw luck.
+const RANDOM_SYNC_CORRELATION_FLOOR = 0.5;
 
 export const OPTICAL_TRANSFORMS = [
   "identity",
@@ -137,12 +144,27 @@ export function analyzeDifferentialDifferences(
     signedMatches += observedSign * sample.expected;
   }
   const signedCorrelation = signedMatches / borderSamples.length;
-  const quality = Math.min(1, Math.max(0, Math.abs(signedCorrelation)));
+  const rawSyncCorrelation = Math.abs(signedCorrelation);
+  const quality = Math.min(
+    1,
+    Math.max(
+      0,
+      (rawSyncCorrelation - RANDOM_SYNC_CORRELATION_FLOOR) /
+        (1 - RANDOM_SYNC_CORRELATION_FLOOR),
+    ),
+  );
   const cells = differences.map(
     (difference) => difference * orientation > 0,
   );
 
-  return { cells, differences, exposureShift, orientation, quality };
+  return {
+    cells,
+    differences,
+    exposureShift,
+    orientation,
+    rawSyncCorrelation,
+    quality,
+  };
 }
 
 export function decodeDifferentialFrames(

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractPayloadBits, layoutBits } from "../lib/optical-layout";
+import {
+  CELL_COUNT,
+  extractPayloadBits,
+  isBorderCell,
+  layoutBits,
+  synchronizationBit,
+} from "../lib/optical-layout";
 import {
   analyzeDifferentialDifferences,
   decodeDifferentialFrames,
@@ -32,6 +38,25 @@ test("differential pixel decoding removes exposure drift and restores the secret
   const { analysis, decoded } = decodeDifferentialFrames(current, reference);
   assert.deepEqual(decoded.secret, SECRET);
   assert.ok(analysis.quality > 0.9);
+});
+
+test("chance-level border matches are removed from scanner confidence", () => {
+  const differences = Array<number>(CELL_COUNT).fill(0);
+  let borderIndex = 0;
+
+  for (let index = 0; index < CELL_COUNT; index += 1) {
+    if (!isBorderCell(index)) continue;
+    const expectedSign = synchronizationBit(index) ? 1 : -1;
+    // 48/68 matching signs produces a raw correlation of about 41%, which is
+    // representative of the best false candidate seen in an empty camera view.
+    differences[index] = expectedSign * (borderIndex < 48 ? 20 : -20);
+    borderIndex += 1;
+  }
+
+  const analysis = analyzeDifferentialDifferences(differences);
+  assert.ok(analysis.rawSyncCorrelation > 0.3);
+  assert.ok(analysis.rawSyncCorrelation < 0.5);
+  assert.equal(analysis.quality, 0);
 });
 
 test("sync search recovers rotated and mirrored optical frames", () => {

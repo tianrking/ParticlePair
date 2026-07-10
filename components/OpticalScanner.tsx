@@ -285,10 +285,14 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
             `边界 ${percent}% · 正在累积 ${Math.min(3, accumulatedFrames)}/3 帧并校验CRC`,
           );
         } else {
-          setMessage(`发现粒子码 ${percent}% · 请保持手机稳定`);
+          setMessage(`检测到同步候选 ${percent}% · 请保持手机稳定`);
         }
       } else {
-        setMessage(`同步质量 ${percent}% · 请将完整方框缩放到取景框内`);
+        setMessage(
+          percent === 0
+            ? "未检测到粒子码 · 请将完整方框对准取景框"
+            : `正在排除背景噪声 ${percent}% · 请对准完整方框`,
+        );
       }
     } else {
       setMessage("已收到相机画面 · 正在同步300ms相反相位…");
