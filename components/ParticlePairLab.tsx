@@ -24,6 +24,7 @@ import {
   UI_COPY,
   type Language,
 } from "../lib/i18n";
+import { VISUAL_MODES, type VisualModeId } from "../lib/visual-modes";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 
@@ -78,6 +79,7 @@ export function ParticlePairLab() {
   const [secretHex, setSecretHex] = useState("");
   const [strength, setStrength] = useState(0.9);
   const [paused, setPaused] = useState(false);
+  const [visualMode, setVisualMode] = useState<VisualModeId>("galaxy");
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -270,10 +272,17 @@ export function ParticlePairLab() {
             </button>
           </div>
           <div className="watch-frame">
-            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} />
+            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} mode={visualMode} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
+          </div>
+          <div className="mode-picker" aria-label="Visual transmission mode">
+            {VISUAL_MODES.map((mode) => (
+              <button key={mode.id} type="button" className={visualMode === mode.id ? "is-active" : ""} onClick={() => setVisualMode(mode.id)} aria-pressed={visualMode === mode.id}>
+                <span>{mode.icon}</span><strong>{mode.name}</strong><small>{mode.subtitle}</small>
+              </button>
+            ))}
           </div>
           <div className="strength-row">
             <label htmlFor="strength">{copy.modulationStrength}</label>

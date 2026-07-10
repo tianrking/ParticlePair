@@ -3,6 +3,7 @@ import {
   isBorderCell,
   PHASE_DURATION_MS,
 } from "./optical-layout";
+import { visualMode, type VisualModeId } from "./visual-modes";
 
 interface Particle {
   angle: number;
@@ -63,6 +64,7 @@ export interface ParticleFrameOptions {
   strength: number;
   time: number;
   width: number;
+  mode?: VisualModeId;
 }
 
 /** Render one complete optical frame. An explicit phase makes iOS diagnostics deterministic. */
@@ -75,7 +77,9 @@ export function renderParticleFrame({
   strength,
   time,
   width,
+  mode = "galaxy",
 }: ParticleFrameOptions): void {
+  const selectedMode = visualMode(mode);
   const phase =
     explicitPhase ?? Math.floor(time / PHASE_DURATION_MS) % 2 === 1;
   const side = Math.min(width, height);
@@ -91,7 +95,7 @@ export function renderParticleFrame({
     centerY,
     side * 0.68,
   );
-  background.addColorStop(0, "#10144a");
+  background.addColorStop(0, selectedMode.kind === "galaxy" ? "#10144a" : "#07152a");
   background.addColorStop(0.48, "#080b2a");
   background.addColorStop(1, "#01020a");
   context.fillStyle = background;

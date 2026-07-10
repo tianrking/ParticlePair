@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react";
 import { renderParticleFrame } from "../lib/particle-renderer";
+import type { VisualModeId } from "../lib/visual-modes";
 
 interface ParticleCloudProps {
   ariaLabel: string;
@@ -9,14 +10,16 @@ interface ParticleCloudProps {
   cells: readonly boolean[];
   strength: number;
   paused?: boolean;
+  mode?: VisualModeId;
 }
 
-export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false }: ParticleCloudProps) {
+export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false, mode = "galaxy" }: ParticleCloudProps) {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
   const strengthRef = useRef(strength);
   const pausedRef = useRef(paused);
+  const modeRef = useRef(mode);
 
   useEffect(() => {
     cellsRef.current = cells;
@@ -29,6 +32,10 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   useEffect(() => {
     pausedRef.current = paused;
   }, [paused]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -60,6 +67,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         strength: strengthRef.current,
         time,
         width,
+        mode: modeRef.current,
       });
 
       animationFrame = requestAnimationFrame(render);
