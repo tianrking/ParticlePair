@@ -18,6 +18,11 @@ main { min-height:100vh; overflow:hidden; }
 .protocol-pill { display:flex; align-items:center; gap:8px; padding:7px 12px; border:1px solid var(--line); border-radius:999px; font-family:var(--font-geist-mono),monospace; font-size:11px; color:var(--muted); }
 .protocol-pill span,.broadcast-label i { width:6px; height:6px; border-radius:50%; background:#1db46b; box-shadow:0 0 0 4px rgba(29,180,107,.12); }
 .text-link { color:inherit; font-size:12px; text-decoration:none; border-bottom:1px solid currentColor; padding-bottom:3px; }
+.topbar-actions { display:flex; align-items:center; justify-content:flex-end; gap:16px; }
+.language-switcher { display:flex; align-items:center; padding:3px; border:1px solid var(--line); border-radius:999px; background:rgba(255,255,255,.3); }
+.language-switcher button { min-width:32px; height:26px; padding:0 8px; border:0; border-radius:999px; background:transparent; color:var(--muted); cursor:pointer; font-family:var(--font-geist-mono),monospace; font-size:9px; font-weight:700; transition:background .18s,color .18s; }
+.language-switcher button:hover { color:var(--ink); }
+.language-switcher button.is-active { background:var(--ink); color:white; }
 
 .hero { max-width:1500px; margin:0 auto; padding:68px 54px 62px; display:grid; grid-template-columns:minmax(360px,.86fr) minmax(560px,1.14fr); align-items:center; gap:70px; }
 .eyebrow { margin:0 0 20px; font-family:var(--font-geist-mono),monospace; font-size:11px; font-weight:650; letter-spacing:.18em; text-transform:uppercase; color:var(--cyan-dark); }
@@ -153,6 +158,8 @@ footer { max-width:1500px; margin:0 auto; padding:25px 34px; display:flex; justi
 @media (max-width:680px) {
   .topbar { height:66px; padding:0 18px; }
   .protocol-pill { display:none; }
+  .topbar-actions { gap:11px; }
+  .language-switcher button { min-width:29px; height:25px; padding:0 7px; }
   .hero { padding:46px 20px 44px; gap:44px; }
   .hero h1 { font-size:64px; }
   .lede { font-size:15px; }
@@ -170,5 +177,9 @@ footer { max-width:1500px; margin:0 auto; padding:25px 34px; display:flex; justi
   .protocol-section li:nth-child(odd) { border-right:0; padding-right:0; }
   .protocol-section li:nth-child(even) { padding-left:0; }
   footer { padding:22px 20px; display:grid; gap:8px; }
+}
+@media (max-width:420px) {
+  .topbar .text-link { display:none; }
+  .brand { gap:9px; font-size:11px; }
 }
 @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }

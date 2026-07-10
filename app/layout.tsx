@@ -14,18 +14,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     title: "ParticlePair",
-    description: "源码可见的非商业粒子光学配对实验室",
+    description: "A source-available noncommercial optical pairing lab built around an animated particle galaxy.",
     icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
     openGraph: {
-      title: "ParticlePair — 让配对码隐入粒子",
-      description: "通过粒子云完成带纠错的一次性光学配对认证。",
+      title: "ParticlePair — Pairing, hidden in motion",
+      description: "Error-protected optical pairing through an animated particle galaxy.",
       type: "website",
-      images: [{ url: socialImage, width: 1672, height: 941, alt: "ParticlePair 粒子光学配对实验室" }],
+      images: [{ url: socialImage, width: 1672, height: 941, alt: "ParticlePair optical pairing lab" }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "ParticlePair — 让配对码隐入粒子",
-      description: "通过粒子云完成带纠错的一次性光学配对认证。",
+      title: "ParticlePair — Pairing, hidden in motion",
+      description: "Error-protected optical pairing through an animated particle galaxy.",
       images: [socialImage],
     },
   };
@@ -33,7 +33,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
     </html>
   );

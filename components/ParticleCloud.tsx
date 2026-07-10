@@ -4,13 +4,14 @@ import { useEffect, useRef, type RefObject } from "react";
 import { renderParticleFrame } from "../lib/particle-renderer";
 
 interface ParticleCloudProps {
+  ariaLabel: string;
   canvasRef?: RefObject<HTMLCanvasElement | null>;
   cells: readonly boolean[];
   strength: number;
   paused?: boolean;
 }
 
-export function ParticleCloud({ canvasRef: externalCanvasRef, cells, strength, paused = false }: ParticleCloudProps) {
+export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false }: ParticleCloudProps) {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
@@ -68,5 +69,5 @@ export function ParticleCloud({ canvasRef: externalCanvasRef, cells, strength, p
     return () => cancelAnimationFrame(animationFrame);
   }, [canvasRef]);
 
-  return <canvas ref={canvasRef} className="particle-canvas" aria-label="正在广播的粒子配对码" />;
+  return <canvas ref={canvasRef} className="particle-canvas" aria-label={ariaLabel} />;
 }

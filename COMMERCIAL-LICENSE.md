@@ -1,4 +1,4 @@
-# Commercial licensing / 商业授权
+# Commercial licensing / Licencia comercial / 商业授权
 
 ## English
 
@@ -18,6 +18,25 @@ Commercial activities that normally require a separate license include:
 - marketing, demonstrations, pilots, or evaluations intended for an anticipated commercial deployment.
 
 To request commercial terms, open a GitHub issue titled `Commercial license inquiry` without confidential information, or contact the repository owner through their public GitHub profile. A request or negotiation is not approval; use may begin only after written authorization is effective.
+
+## Español
+
+ParticlePair se distribuye como código disponible bajo la [PolyForm Noncommercial License 1.0.0](LICENSE). La licencia del repositorio público solo concede los derechos permitidos por sus términos. **No concede ningún derecho de uso comercial.**
+
+El uso comercial solo se permite después de que el titular de los derechos, **tianrking**, emita una autorización escrita y explícita o las partes firmen una licencia comercial independiente. El licenciatario debe aceptar y cumplir esas condiciones escritas antes de comenzar el uso comercial.
+
+Una autorización válida debe identificar al licenciatario y el alcance permitido. El acceso al repositorio, un fork, un despliegue, una respuesta a un issue, un pull request, una conversación, un mensaje sin respuesta o la posibilidad técnica de usar el software **no constituyen permiso comercial**.
+
+Las actividades comerciales que normalmente requieren una licencia independiente incluyen:
+
+- integración en un producto comercial, servicio de pago o suscripción;
+- venta, licencia, monetización o distribución de pago de ParticlePair o de una obra derivada;
+- trabajo para clientes que genere ingresos, consultoría o entrega por contrato;
+- uso interno que apoye las operaciones comerciales de una empresa con fines de lucro;
+- hardware, firmware, aplicaciones móviles o de escritorio, SDK o API alojadas con fines comerciales;
+- marketing, demostraciones, pilotos o evaluaciones destinados a un futuro despliegue comercial.
+
+Para solicitar condiciones comerciales, abre un issue de GitHub titulado `Commercial license inquiry` sin información confidencial, o contacta con el propietario del repositorio mediante su perfil público de GitHub. Una solicitud o negociación no implica aprobación; el uso solo puede comenzar cuando la autorización escrita entre en vigor.
 
 ## 中文
 

@@ -20,10 +20,14 @@ test("server-renders the ParticlePair product shell", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>ParticlePair/);
-  assert.match(html, /让配对码/);
-  assert.match(html, /广播粒子码/);
-  assert.match(html, /相机接收/);
-  assert.match(html, /从动态画面恢复密钥/);
+  assert.match(html, /Let pairing codes/);
+  assert.match(html, /Broadcast particle code/);
+  assert.match(html, /Camera receiver/);
+  assert.match(html, /Recover secret from animation/);
+  assert.match(html, /aria-label="Language"/);
+  assert.match(html, /aria-pressed="true"[^>]*>EN</);
+  assert.match(html, /aria-pressed="false"[^>]*>ES</);
+  assert.match(html, /aria-pressed="false"[^>]*>中文</);
   assert.match(html, /scan-quality-label/);
   assert.match(html, /SYNC/);
   assert.match(html, /Hamming\(12,8\)/);

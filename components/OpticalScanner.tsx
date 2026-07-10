@@ -19,8 +19,10 @@ import {
 } from "../lib/camera-geometry";
 import { opticalPixelValue } from "../lib/optical-color";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
+import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 
 interface OpticalScannerProps {
+  language: Language;
   onDecoded: (result: DecodedParticleCode) => void;
 }
 
@@ -29,11 +31,46 @@ interface EvidenceBucket {
   lastTimestamp: number;
 }
 
+type ScannerMessage =
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" }
+  | { kind: "success"; corrected: number; percent: number }
+  | { kind: "boundary"; frames: number; percent: number }
+  | { kind: "candidate" | "noise"; percent: number };
+
 const HISTORY_DURATION_MS = 900;
 const PHASE_TOLERANCE_MS = 120;
 const MAX_ACCUMULATED_FRAMES = 5;
 const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
+
+function scannerMessageText(message: ScannerMessage, copy: ScannerCopy): string {
+  switch (message.kind) {
+    case "stopped":
+      return copy.stopped;
+    case "success":
+      return copy.success(message.percent, message.corrected);
+    case "boundary":
+      return copy.boundary(message.percent, message.frames);
+    case "candidate":
+      return copy.candidate(message.percent);
+    case "none":
+      return copy.none;
+    case "noise":
+      return copy.noise(message.percent);
+    case "synchronizing":
+      return copy.synchronizing;
+    case "insecure":
+      return copy.insecure;
+    case "unsupported":
+      return copy.unsupported;
+    case "searching":
+      return copy.searching;
+    case "permission":
+      return copy.permission;
+    default:
+      return copy.align;
+  }
+}
 
 function sampleVideoCandidates(
   video: HTMLVideoElement,
@@ -89,7 +126,7 @@ function sampleVideoCandidates(
   return candidates;
 }
 
-export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
+export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const samplingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -101,7 +138,8 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
   const lastSuccessRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [message, setMessage] = useState("将电脑上的完整粒子方框对准取景框");
+  const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
+  const copy = UI_COPY[language].scanner;
 
   const cancelScheduledFrame = () => {
     const video = videoRef.current;
@@ -125,7 +163,7 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
     evidenceRef.current.clear();
     setRunning(false);
     setQuality(0);
-    setMessage("扫描已停止");
+    setMessage({ kind: "stopped" });
   };
 
   useEffect(() => {
@@ -258,26 +296,26 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
 
         if (recovered) {
           lastSuccessRef.current = timestamp;
-          setMessage(
-            `识别成功 · ${percent}% · 修正 ${recovered.correctedCodewords} 个码字`,
-          );
+          setMessage({
+            kind: "success",
+            corrected: recovered.correctedCodewords,
+            percent,
+          });
           onDecoded(recovered);
         } else if (score >= DECODE_QUALITY) {
-          setMessage(
-            `边界 ${percent}% · 正在累积 ${Math.min(3, accumulatedFrames)}/3 帧并校验CRC`,
-          );
+          setMessage({
+            kind: "boundary",
+            frames: Math.min(3, accumulatedFrames),
+            percent,
+          });
         } else {
-          setMessage(`检测到同步候选 ${percent}% · 请保持手机稳定`);
+          setMessage({ kind: "candidate", percent });
         }
       } else {
-        setMessage(
-          percent === 0
-            ? "未检测到粒子码 · 请将完整方框对准取景框"
-            : `正在排除背景噪声 ${percent}% · 请对准完整方框`,
-        );
+        setMessage(percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
-      setMessage("已收到相机画面 · 正在同步300ms相反相位…");
+      setMessage({ kind: "synchronizing" });
     }
 
     scheduleNextFrame();
@@ -285,11 +323,11 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
 
   const start = async () => {
     if (!window.isSecureContext) {
-      setMessage("摄像头需要HTTPS安全页面，请使用部署地址打开");
+      setMessage({ kind: "insecure" });
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMessage("当前浏览器不支持摄像头访问，请升级Chrome、Safari、Edge或Firefox");
+      setMessage({ kind: "unsupported" });
       return;
     }
 
@@ -314,17 +352,17 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
       evidenceRef.current.clear();
       runningRef.current = true;
       setRunning(true);
-      setMessage("正在搜索位置、比例与方向…");
+      setMessage({ kind: "searching" });
       scheduleNextFrame();
     } catch {
-      setMessage("无法打开摄像头，请在浏览器与系统设置中允许相机权限");
+      setMessage({ kind: "permission" });
     }
   };
 
   return (
     <div className="scanner-shell">
       <div className={`camera-stage ${running ? "is-running" : ""}`}>
-        <video ref={videoRef} muted playsInline />
+        <video ref={videoRef} muted playsInline aria-label={copy.cameraView} />
         <div className="camera-placeholder" aria-hidden={running}>
           <span className="scanner-orbit" />
           <span>CAMERA</span>
@@ -333,11 +371,20 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
-        <div className="scan-quality"><span style={{ width: `${quality}%` }} /></div>
+        <div
+          className="scan-quality"
+          role="progressbar"
+          aria-label={copy.syncQuality}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={quality}
+        >
+          <span style={{ width: `${quality}%` }} />
+        </div>
       </div>
-      <p className="scanner-message">{message}</p>
+      <p className="scanner-message">{scannerMessageText(message, copy)}</p>
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
-        {running ? "停止扫描" : "打开摄像头扫描"}
+        {running ? copy.stop : copy.start}
       </button>
     </div>
   );

@@ -6,6 +6,7 @@
 
   <p>
     <a href="./README.md"><img alt="English" src="https://img.shields.io/badge/Language-English-111827?style=for-the-badge" /></a>
+    <a href="./README.es.md"><img alt="Español" src="https://img.shields.io/badge/Idioma-Español-B45309?style=for-the-badge" /></a>
     <a href="./README.zh-CN.md"><img alt="简体中文" src="https://img.shields.io/badge/语言-简体中文-0F766E?style=for-the-badge" /></a>
   </p>
 
@@ -115,6 +116,7 @@ A person sees 1,050 saturated particles rotating through three spiral arms, brea
 ## Features
 
 - Generate or enter a 16-byte/128-bit one-time secret.
+- Switch the complete interface between English, Spanish, and Simplified Chinese, with the choice saved locally.
 - Encode a 21-byte Particle Code v1 packet.
 - Validate with CRC-16/CCITT-FALSE.
 - Correct one bit in each Hamming(12,8) codeword.
