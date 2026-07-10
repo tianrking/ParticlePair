@@ -36,6 +36,7 @@ type ScannerMessage =
   | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
+  | { kind: "fountain"; rank: number; percent: number }
   | { kind: "candidate" | "noise"; percent: number };
 
 const HISTORY_DURATION_MS = 900;
@@ -44,7 +45,7 @@ const MAX_ACCUMULATED_FRAMES = 5;
 const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
 
-function scannerMessageText(message: ScannerMessage, copy: ScannerCopy): string {
+function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
     case "stopped":
       return copy.stopped;
@@ -52,6 +53,12 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy): string 
       return copy.success(message.percent, message.corrected);
     case "boundary":
       return copy.boundary(message.percent, message.frames);
+    case "fountain":
+      return language === "zh"
+        ? `Fountain v2 ${message.percent}% · 方程秩 ${message.rank}/4 · 正在收集独立分片`
+        : language === "es"
+          ? `Fountain v2 ${message.percent}% · rango ${message.rank}/4 · recopilando fragmentos`
+          : `Fountain v2 ${message.percent}% · equation rank ${message.rank}/4 · collecting fragments`;
     case "candidate":
       return copy.candidate(message.percent);
     case "none":
@@ -319,6 +326,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
             percent,
           });
           onDecoded(recovered);
+        } else if (v2Rank > 0) {
+          setMessage({ kind: "fountain", rank: v2Rank, percent });
         } else if (score >= DECODE_QUALITY) {
           setMessage({
             kind: "boundary",
@@ -400,7 +409,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span style={{ width: `${quality}%` }} />
         </div>
       </div>
-      <p className="scanner-message">{scannerMessageText(message, copy)}</p>
+      <p className="scanner-message">{scannerMessageText(message, copy, language)}</p>
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
         {running ? copy.stop : copy.start}
       </button>
