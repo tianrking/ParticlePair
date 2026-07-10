@@ -94,6 +94,7 @@ export function ParticlePairLab() {
   const [modeCategory, setModeCategory] = useState<"All" | VisualCategory>("All");
   const [autoShowcase, setAutoShowcase] = useState(false);
   const [immersive, setImmersive] = useState(false);
+  const [wakeLockActive, setWakeLockActive] = useState(false);
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
@@ -167,10 +168,13 @@ export function ParticlePairLab() {
 
   useEffect(() => {
     if (!immersive) return;
+    let wakeLock: WakeLockSentinel | null = null;
+    let disposed = false;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersive(false); };
     document.body.classList.add("is-immersive");
     window.addEventListener("keydown", onKeyDown);
-    return () => { document.body.classList.remove("is-immersive"); window.removeEventListener("keydown", onKeyDown); };
+    navigator.wakeLock?.request("screen").then((sentinel) => { if (disposed) void sentinel.release(); else { wakeLock = sentinel; setWakeLockActive(true); sentinel.addEventListener("release", () => setWakeLockActive(false)); } }).catch(() => setWakeLockActive(false));
+    return () => { disposed = true; setWakeLockActive(false); void wakeLock?.release(); document.body.classList.remove("is-immersive"); window.removeEventListener("keydown", onKeyDown); };
   }, [immersive]);
 
   useEffect(() => {
@@ -451,7 +455,7 @@ export function ParticlePairLab() {
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
           <div className="watch-frame">
-            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} mode={visualMode} />
+            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
@@ -593,7 +597,7 @@ export function ParticlePairLab() {
         <section className="immersive-stage" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties} role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
           <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} />
           <div className="immersive-glass" aria-hidden="true" />
-          <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE GENERATIVE OPTICAL LINK</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
+          <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
           <div className="immersive-meta"><span>{selectedVisualMode.category}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
           <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><div><span className="live-dot" />TRANSMITTING · PHASE 300 MS · CRC-16</div><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
           <div className="immersive-boundary" aria-hidden="true"><i /><i /><i /><i /></div>

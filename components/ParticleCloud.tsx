@@ -18,8 +18,8 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
   const strengthRef = useRef(strength);
-  const pausedRef = useRef(paused);
   const modeRef = useRef(mode);
+  const frozenTimeRef = useRef(0);
 
   useEffect(() => {
     cellsRef.current = cells;
@@ -28,10 +28,6 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   useEffect(() => {
     strengthRef.current = strength;
   }, [strength]);
-
-  useEffect(() => {
-    pausedRef.current = paused;
-  }, [paused]);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -45,8 +41,6 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
     if (!context) return;
 
     let animationFrame = 0;
-    let frozenTime = 0;
-
     const render = (timestamp: number) => {
       const bounds = canvas.getBoundingClientRect();
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -57,8 +51,8 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         canvas.height = height;
       }
 
-      const time = pausedRef.current ? frozenTime : timestamp;
-      if (!pausedRef.current) frozenTime = timestamp;
+      const time = paused ? frozenTimeRef.current : timestamp;
+      if (!paused) frozenTimeRef.current = timestamp;
       renderParticleFrame({
         cells: cellsRef.current,
         context,
@@ -70,12 +64,12 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         mode: modeRef.current,
       });
 
-      animationFrame = requestAnimationFrame(render);
+      if (!paused) animationFrame = requestAnimationFrame(render);
     };
 
     animationFrame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrame);
-  }, [canvasRef]);
+  }, [canvasRef, paused]);
 
   return <canvas ref={canvasRef} className="particle-canvas" aria-label={ariaLabel} />;
 }
