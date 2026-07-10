@@ -25,6 +25,7 @@ import {
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
+import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } from "../lib/frame-timing";
 
 interface OpticalScannerProps {
   language: Language;
@@ -37,18 +38,18 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "timing" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
   | { kind: "candidate" | "noise"; percent: number };
 
 const HISTORY_DURATION_MS = 900;
-const PHASE_TOLERANCE_MS = 120;
 const MAX_ACCUMULATED_FRAMES = 5;
 const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
 const PERSPECTIVE_PATCH_SIZE = 36;
+const INITIAL_TIMING: FrameTimingSnapshot = { fps: 0, frameIntervalMs: 0, jitterMs: 0, pairToleranceMs: 120, state: "measuring" };
 
 function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
@@ -84,6 +85,8 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return language === "zh" ? "画面高光溢出 · 请降低屏幕亮度或稍微拉远" : language === "es" ? "Altas luces saturadas · reduce el brillo o aumenta la distancia" : "Highlights clipped · lower screen brightness or move slightly farther away";
     case "underexposed":
       return language === "zh" ? "有效动态范围不足 · 请避开强背光并保持屏幕完整入框" : language === "es" ? "Rango dinámico insuficiente · evita el contraluz y encuadra toda la pantalla" : "Dynamic range too low · avoid backlight and keep the full screen in frame";
+    case "timing":
+      return language === "zh" ? "相机帧间隔波动较大 · 请保持页面在前台并关闭省电模式" : language === "es" ? "Cadencia de cámara inestable · mantén la página visible y desactiva el ahorro de energía" : "Camera cadence is unstable · keep the page visible and disable battery saver";
     default:
       return copy.align;
   }
@@ -158,10 +161,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const lastSuccessRef = useRef(0);
   const v2DecoderRef = useRef(new V2FountainDecoder());
   const adaptiveSearchRef = useRef(new AdaptiveOpticalSearch());
+  const timingRef = useRef(new FrameTimingEstimator());
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [telemetry, setTelemetry] = useState<{ candidates: number; durationMs: number; exposureGain: number; health: CameraCaptureHealth | null; tier: OpticalSearchTier }>({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
+  const [telemetry, setTelemetry] = useState<{ candidates: number; durationMs: number; exposureGain: number; health: CameraCaptureHealth | null; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -187,7 +191,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     evidenceRef.current.clear();
     v2DecoderRef.current = new V2FountainDecoder();
     adaptiveSearchRef.current.reset();
-    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
+    timingRef.current.reset();
+    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -247,21 +252,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       timestamp,
     };
     const sampleDurationMs = sampled.durationMs;
+    const timing = timingRef.current.observe(timestamp);
 
     const history = historyRef.current;
-    const reference = history
-      .filter((frame) => {
-        const delta = timestamp - frame.timestamp;
-        return (
-          delta >= PHASE_DURATION_MS - PHASE_TOLERANCE_MS &&
-          delta <= PHASE_DURATION_MS + PHASE_TOLERANCE_MS
-        );
-      })
-      .sort(
-        (left, right) =>
-          Math.abs(timestamp - left.timestamp - PHASE_DURATION_MS) -
-          Math.abs(timestamp - right.timestamp - PHASE_DURATION_MS),
-      )[0];
+    const reference = selectPhaseReference(history, timestamp, PHASE_DURATION_MS, timing.pairToleranceMs);
 
     history.push(current);
     historyRef.current = history.filter(
@@ -283,6 +277,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
           tier,
+          timing,
         });
       }
 
@@ -300,6 +295,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
           tier: decision.tier,
+          timing,
         });
       }
 
@@ -392,7 +388,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
-      setMessage({ kind: "synchronizing" });
+      setMessage(timing.state === "jittery" ? { kind: "timing" } : { kind: "synchronizing" });
     }
 
     scheduleNextFrame();
@@ -429,8 +425,9 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       evidenceRef.current.clear();
       v2DecoderRef.current = new V2FountainDecoder();
       adaptiveSearchRef.current.reset();
+      timingRef.current.reset();
       lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
+      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -455,10 +452,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"}`} aria-label="Scanner performance and dynamic range telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
           <span>GEO {telemetry.candidates}</span>
-          <span>{telemetry.durationMs.toFixed(1)} MS</span>
+          <span>{telemetry.timing.fps ? `${telemetry.durationMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
           <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
           <span className="health-pill">DR {telemetry.health ? Math.round(telemetry.health.score * 100) : "—"}</span>
           <span>CYAN Δ</span>
+          <span className={`timing-pill ${telemetry.timing.state}`}>J{telemetry.timing.state === "measuring" ? "—" : Math.round(telemetry.timing.jitterMs)}</span>
         </div>
         <div
           className="scan-quality"

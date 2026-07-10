@@ -26,6 +26,7 @@ import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, samplePerspectiveGridWithHealth, type PerspectiveQuad } from "../lib/perspective-sampling";
 import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adaptive-optical-search";
+import { FrameTimingEstimator, selectPhaseReference } from "../lib/frame-timing";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -133,6 +134,24 @@ test("adaptive search contracts slowly and expands immediately after sync loss",
   search.observe({ quality: 0.12, sampleDurationMs: 7 });
   search.observe({ quality: 0.12, sampleDurationMs: 7 });
   assert.equal(search.tier, "acquire");
+});
+
+test("frame timing uses robust cadence and bounded phase tolerance", () => {
+  const stable = new FrameTimingEstimator();
+  for (let frame = 0; frame < 12; frame += 1) stable.observe(frame * (1000 / 60));
+  const stableTiming = stable.snapshot();
+  assert.equal(stableTiming.fps, 60); assert.equal(stableTiming.state, "stable"); assert.equal(stableTiming.pairToleranceMs, 72);
+
+  const jittery = new FrameTimingEstimator(); let timestamp = 0; jittery.observe(timestamp);
+  for (let frame = 0; frame < 12; frame += 1) { timestamp += frame % 2 ? 60 : 20; jittery.observe(timestamp); }
+  const jitterTiming = jittery.snapshot();
+  assert.equal(jitterTiming.state, "jittery"); assert.ok(jitterTiming.pairToleranceMs > stableTiming.pairToleranceMs); assert.ok(jitterTiming.pairToleranceMs <= 145);
+});
+
+test("adaptive phase reference recovers low-fps opposite frames and rejects distant history", () => {
+  const history = [0, 167, 334].map((frameTimestamp) => ({ timestamp: frameTimestamp }));
+  assert.equal(selectPhaseReference(history, 500, 300, 131)?.timestamp, 167);
+  assert.equal(selectPhaseReference(history, 900, 300, 145), undefined);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

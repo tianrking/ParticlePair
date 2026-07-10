@@ -199,6 +199,8 @@ main { min-height:100vh; overflow:hidden; }
 .scanner-telemetry .health-pill { color:#d8fff8; border-color:rgba(60,255,203,.2); background:linear-gradient(135deg,rgba(8,85,78,.72),rgba(15,27,53,.76)); }
 .scanner-telemetry.health-clipped .health-pill { color:#fff3f9; border-color:rgba(255,92,175,.36); background:linear-gradient(135deg,rgba(161,28,92,.82),rgba(70,20,111,.8)); box-shadow:0 0 18px rgba(255,45,148,.24); }
 .scanner-telemetry.health-dark .health-pill,.scanner-telemetry.health-flat .health-pill { color:#fff8e8; border-color:rgba(255,192,83,.34); background:linear-gradient(135deg,rgba(129,69,15,.82),rgba(68,25,94,.8)); box-shadow:0 0 18px rgba(255,149,53,.2); }
+.scanner-telemetry .timing-pill { color:#d8efff; border-color:rgba(88,183,255,.2); background:linear-gradient(135deg,rgba(16,61,109,.76),rgba(45,22,91,.76)); }
+.scanner-telemetry .timing-pill.jittery { color:#fff5e9; border-color:rgba(255,173,75,.36); background:linear-gradient(135deg,rgba(145,65,16,.84),rgba(91,24,94,.8)); box-shadow:0 0 18px rgba(255,132,48,.22); }
 .scanner-message { min-height:14px; margin:0; color:var(--muted); font-size:10px; text-align:center; }
 
 .decoded-panel { display:flex; flex-direction:column; }

@@ -208,6 +208,8 @@ Camera RGB is projected into an amplitude-preserving cyan opponent channel, `G -
 
 Every perspective candidate also carries a dynamic-range health record. A cell is considered clipped only when at least two RGB channels reach the sensor ceiling, avoiding false warnings from the intentionally green-heavy cyan carrier. The 10th-to-90th percentile opponent-channel span distinguishes a useful signal from a flat frame, while the all-channel shadow ratio detects underexposure. `DR` reports the combined health score; when synchronization is weak, the receiver turns that evidence into specific brightness, distance, or backlight guidance instead of reporting generic noise.
 
+Frame pairing uses a rolling 15-interval timing model rather than a fixed tolerance. The median interval estimates real camera FPS and the median absolute deviation measures jitter without letting one suspended callback dominate. The opposite-phase window contracts to 72 ms on stable high-frame-rate cameras and expands only as far as 145 ms for slower or irregular capture, preserving phase separation. `J` exposes jitter in milliseconds; an unstable cadence produces a specific foreground/battery-saver hint.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

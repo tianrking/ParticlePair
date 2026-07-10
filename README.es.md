@@ -208,6 +208,8 @@ El RGB de la cámara se proyecta en un canal oponente cian que conserva amplitud
 
 Cada candidato de perspectiva incluye además un registro de rango dinámico. Un punto solo se considera saturado cuando al menos dos canales RGB alcanzan el límite del sensor, evitando falsas alarmas por el portador cian deliberadamente verde. El rango percentil 10–90 del canal oponente distingue señal útil de una imagen plana y la proporción de sombras en los tres canales detecta subexposición. `DR` muestra la salud combinada; con sincronía débil, el receptor convierte estas pruebas en indicaciones concretas sobre brillo, distancia o contraluz en lugar de mostrar ruido genérico.
 
+El emparejamiento de fases usa un modelo móvil de 15 intervalos en lugar de una tolerancia fija. La mediana estima los FPS reales y la desviación absoluta mediana mide el jitter sin dejar que una pausa aislada domine. La ventana se reduce a 72 ms en cámaras rápidas y estables y solo se amplía hasta 145 ms con captura lenta o irregular, manteniendo separables las fases. `J` muestra el jitter en milisegundos; una cadencia inestable genera una indicación específica para mantener la página visible y desactivar el ahorro de batería.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1
