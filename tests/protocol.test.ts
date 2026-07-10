@@ -4,6 +4,7 @@ import {
   guideCropCandidates,
   objectFitCoverSourceRectangle,
 } from "../lib/camera-geometry";
+import { opticalPixelValue } from "../lib/optical-color";
 import {
   CELL_COUNT,
   extractPayloadBits,
@@ -21,6 +22,17 @@ import { rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("cyan carrier is separated from vivid galaxy colors", () => {
+  const carrier = opticalPixelValue(35, 255, 218);
+  const galaxyColors = [
+    opticalPixelValue(48, 18, 255),
+    opticalPixelValue(157, 8, 255),
+    opticalPixelValue(255, 10, 166),
+  ];
+
+  assert.ok(galaxyColors.every((value) => carrier > value * 10));
+});
 
 test("camera guide maps to the visible part of landscape and portrait streams", () => {
   const landscape = objectFitCoverSourceRectangle(1920, 1080, 450, 300);

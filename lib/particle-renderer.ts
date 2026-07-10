@@ -6,12 +6,21 @@ import {
 
 interface Particle {
   angle: number;
+  color: readonly [number, number, number];
   radius: number;
   depth: number;
   size: number;
   speed: number;
-  hue: number;
 }
+
+const GALAXY_COLORS = [
+  [48, 18, 255],
+  [92, 12, 255],
+  [157, 8, 255],
+  [224, 8, 238],
+  [255, 10, 166],
+  [255, 16, 122],
+] as const;
 
 function mulberry32(seed: number): () => number {
   return () => {
@@ -25,16 +34,24 @@ function mulberry32(seed: number): () => number {
 
 const PARTICLES: readonly Particle[] = (() => {
   const random = mulberry32(0x50434f44);
-  return Array.from({ length: 900 }, (): Particle => ({
-    angle: random() * Math.PI * 2,
-    radius: Math.pow(random(), 0.58),
-    depth: random(),
-    size: 0.45 + random() * 1.85,
-    speed: 0.08 + random() * 0.24,
-    // Cyan through violet with occasional rose tones: a wider but still cool
-    // palette keeps the cloud romantic without changing the optical carrier.
-    hue: 178 + random() * 142,
-  }));
+  return Array.from({ length: 1050 }, (_, index): Particle => {
+    const radius = Math.pow(random(), 0.66);
+    const haloParticle = random() < 0.18;
+    const arm = (index % 3) * ((Math.PI * 2) / 3);
+    const armJitter = (random() + random() - 1) * (0.42 + radius * 0.52);
+    const angle = haloParticle
+      ? random() * Math.PI * 2
+      : arm + radius * 5.35 + armJitter;
+
+    return {
+      angle,
+      color: GALAXY_COLORS[Math.floor(random() * GALAXY_COLORS.length)],
+      depth: random(),
+      radius,
+      size: 0.5 + random() * 2.15,
+      speed: 0.08 + random() * 0.24,
+    };
+  });
 })();
 
 export interface ParticleFrameOptions {
@@ -74,10 +91,22 @@ export function renderParticleFrame({
     centerY,
     side * 0.68,
   );
-  background.addColorStop(0, "#0a1d3a");
-  background.addColorStop(0.55, "#050b20");
-  background.addColorStop(1, "#01030a");
+  background.addColorStop(0, "#10144a");
+  background.addColorStop(0.48, "#080b2a");
+  background.addColorStop(1, "#01020a");
   context.fillStyle = background;
+  context.fillRect(0, 0, width, height);
+
+  const nebula = context.createLinearGradient(
+    centerX - side * 0.48,
+    centerY - side * 0.32,
+    centerX + side * 0.48,
+    centerY + side * 0.32,
+  );
+  nebula.addColorStop(0, "rgba(61, 93, 255, .13)");
+  nebula.addColorStop(0.48, "rgba(173, 50, 255, .08)");
+  nebula.addColorStop(1, "rgba(255, 47, 174, .11)");
+  context.fillStyle = nebula;
   context.fillRect(0, 0, width, height);
 
   context.globalCompositeOperation = "lighter";
@@ -89,8 +118,8 @@ export function renderParticleFrame({
     const positive = cells[index] === phase;
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
-      0.052 +
-      (positive ? strength : -strength) * 0.17 * borderBoost;
+      0.055 +
+      (positive ? strength : -strength) * 0.19 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -101,9 +130,9 @@ export function renderParticleFrame({
     );
     glow.addColorStop(
       0,
-      `rgba(80, 222, 255, ${Math.max(0.012, alpha)})`,
+      `rgba(35, 255, 218, ${Math.max(0.012, alpha)})`,
     );
-    glow.addColorStop(1, "rgba(20, 94, 166, 0)");
+    glow.addColorStop(1, "rgba(16, 120, 178, 0)");
     context.fillStyle = glow;
     context.fillRect(
       x - cellSize * 0.65,
@@ -113,32 +142,38 @@ export function renderParticleFrame({
     );
   }
 
-  // A slow orbital drift keeps the cloud graceful; color density comes from
-  // deeper chroma rather than near-white luminance that would mask the code.
-  const rotation = time * 0.000055;
+  const rotation = time * 0.000075;
   for (const particle of PARTICLES) {
-    const wave = Math.sin(time * 0.00035 + particle.angle * 3.1) * 0.045;
-    const radius = (particle.radius + wave) * side * 0.43;
-    const angle = particle.angle + rotation * particle.speed * 6;
-    const perspective = 0.76 + particle.depth * 0.3;
+    const wave =
+      Math.sin(time * 0.00028 + particle.angle * 2.6) *
+      (0.016 + (1 - particle.depth) * 0.018);
+    const radius = (particle.radius + wave) * side * 0.45;
+    const angle =
+      particle.angle +
+      rotation * (0.72 + particle.speed * 5.2) +
+      Math.sin(time * 0.0002 + particle.radius * 8) * 0.018;
+    const perspective = 0.88 + particle.depth * 0.14;
     const x = centerX + Math.cos(angle) * radius * perspective;
     const y =
       centerY +
-      Math.sin(angle) * radius * (0.72 + particle.depth * 0.24);
+      Math.sin(angle) * radius * (0.56 + particle.depth * 0.2);
     const shimmer =
-      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) *
-      0.28 *
-      (0.82 + particle.depth * 0.28);
+      (0.52 + Math.sin(time * 0.00082 + particle.angle * 8.5) * 0.17) *
+      (0.62 + particle.depth * 0.48);
+    const [red, green, blue] = particle.color;
+    const particleRadius =
+      particle.size * pixelRatio * (0.72 + particle.depth * 1.18);
+
+    if (particle.depth > 0.7) {
+      context.beginPath();
+      context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${shimmer * 0.16})`;
+      context.arc(x, y, particleRadius * 2.8, 0, Math.PI * 2);
+      context.fill();
+    }
 
     context.beginPath();
-    context.fillStyle = `hsla(${particle.hue}, 100%, ${56 + particle.depth * 14}%, ${shimmer})`;
-    context.arc(
-      x,
-      y,
-      particle.size * pixelRatio * (0.72 + particle.depth * 1.08),
-      0,
-      Math.PI * 2,
-    );
+    context.fillStyle = `rgba(${red}, ${green}, ${blue}, ${shimmer})`;
+    context.arc(x, y, particleRadius, 0, Math.PI * 2);
     context.fill();
   }
 

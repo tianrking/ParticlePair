@@ -17,6 +17,7 @@ import {
   guideCropCandidates,
   objectFitCoverSourceRectangle,
 } from "../lib/camera-geometry";
+import { opticalPixelValue } from "../lib/optical-color";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 
 interface OpticalScannerProps {
@@ -73,10 +74,10 @@ function sampleVideoCandidates(
     ).data;
     const values = Array.from({ length: CELL_COUNT }, (_, index) => {
       const pixelOffset = index * 4;
-      return (
-        pixels[pixelOffset] * 0.2126 +
-        pixels[pixelOffset + 1] * 0.7152 +
-        pixels[pixelOffset + 2] * 0.0722
+      return opticalPixelValue(
+        pixels[pixelOffset],
+        pixels[pixelOffset + 1],
+        pixels[pixelOffset + 2],
       );
     });
     candidates.push({

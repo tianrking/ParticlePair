@@ -1,4 +1,5 @@
 import { GRID_SIZE } from "./optical-layout";
+import { opticalPixelValue } from "./optical-color";
 import {
   decodeDifferentialFrames,
   type DifferentialFrameAnalysis,
@@ -78,10 +79,10 @@ function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
   ).data;
   const values = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
     const offset = index * 4;
-    return (
-      pixels[offset] * 0.2126 +
-      pixels[offset + 1] * 0.7152 +
-      pixels[offset + 2] * 0.0722
+    return opticalPixelValue(
+      pixels[offset],
+      pixels[offset + 1],
+      pixels[offset + 2],
     );
   });
 
