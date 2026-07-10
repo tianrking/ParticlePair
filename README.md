@@ -212,6 +212,8 @@ Frame pairing uses a rolling 15-interval timing model rather than a fixed tolera
 
 The displayed processing time now covers geometry sampling, RGB health analysis, eight-way orientation transforms, exposure fitting, and candidate ranking—not just canvas reads. A load controller enters cooling only after four consecutive over-budget frames, then processes alternate camera callbacks while the cadence estimator continues observing every callback. Eight sustained low-load observations restore full-rate processing. `L` reports duty-adjusted utilization, so cooling reflects actual average CPU pressure rather than the cost of one processed frame.
 
+Candidate release also requires cross-frame orientation consensus. The receiver keeps an eight-winner window over the eight rotation/mirror transforms; nearby crop keys may move as the hand moves, but a transform must hold at least a two-thirds majority and survive the runner-up margin check. Three observations are required to establish a lock, at least two soft-evidence frames from the same candidate are required before decode, and signal loss clears the vote immediately. `C` shows consensus strength; magenta means ambiguous orientation and prevents release even before Hamming and CRC validation.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

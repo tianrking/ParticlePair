@@ -212,6 +212,8 @@ El emparejamiento de fases usa un modelo móvil de 15 intervalos en lugar de una
 
 El tiempo mostrado ahora incluye muestreo geométrico, salud RGB, ocho transformaciones de orientación, ajuste de exposición y ranking de candidatos, no solo la lectura del Canvas. El controlador entra en enfriamiento tras cuatro fotogramas consecutivos fuera de presupuesto y procesa callbacks alternos, mientras el estimador temporal sigue observándolos todos. Ocho observaciones sostenidas de baja carga restauran la frecuencia completa. `L` informa utilización corregida por ciclo de trabajo para representar la presión media real de CPU.
 
+La liberación también exige consenso temporal de orientación. El receptor mantiene una ventana de ocho ganadores sobre las ocho rotaciones y reflejos; las claves de recorte próximas pueden cambiar con el movimiento de la mano, pero una transformación debe conservar al menos dos tercios de los votos y superar la comprobación de margen frente a la segunda opción. Se requieren tres observaciones para bloquear y dos fotogramas de evidencia suave del mismo candidato antes de decodificar; perder señal borra los votos. `C` muestra la fuerza del consenso y el magenta indica ambigüedad que bloquea la liberación antes de Hamming y CRC.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1

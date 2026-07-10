@@ -27,6 +27,7 @@ import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } from "../lib/frame-timing";
 import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
+import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/candidate-consensus";
 
 interface OpticalScannerProps {
   language: Language;
@@ -39,7 +40,7 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "timing" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "timing" | "ambiguous" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
@@ -52,6 +53,7 @@ const DECODE_QUALITY = 0.47;
 const PERSPECTIVE_PATCH_SIZE = 36;
 const INITIAL_TIMING: FrameTimingSnapshot = { fps: 0, frameIntervalMs: 0, jitterMs: 0, pairToleranceMs: 120, state: "measuring" };
 const INITIAL_LOAD: ScanLoadSnapshot = { processingMs: 0, state: "normal", utilization: 0 };
+const INITIAL_CONSENSUS: CandidateConsensusSnapshot = { confidence: 0, dominantTransform: null, geometryStability: 0, margin: 0, state: "measuring" };
 
 function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
@@ -89,6 +91,8 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return language === "zh" ? "有效动态范围不足 · 请避开强背光并保持屏幕完整入框" : language === "es" ? "Rango dinámico insuficiente · evita el contraluz y encuadra toda la pantalla" : "Dynamic range too low · avoid backlight and keep the full screen in frame";
     case "timing":
       return language === "zh" ? "相机帧间隔波动较大 · 请保持页面在前台并关闭省电模式" : language === "es" ? "Cadencia de cámara inestable · mantén la página visible y desactiva el ahorro de energía" : "Camera cadence is unstable · keep the page visible and disable battery saver";
+    case "ambiguous":
+      return language === "zh" ? "方向候选存在歧义 · 请保持设备稳定并让四角完整入框" : language === "es" ? "Orientación ambigua · mantén el dispositivo estable y encuadra las cuatro esquinas" : "Orientation is ambiguous · hold steady and keep all four corners in frame";
     default:
       return copy.align;
   }
@@ -171,10 +175,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const adaptiveSearchRef = useRef(new AdaptiveOpticalSearch());
   const timingRef = useRef(new FrameTimingEstimator());
   const loadRef = useRef(new ScanLoadController());
+  const consensusRef = useRef(new CandidateConsensus());
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [telemetry, setTelemetry] = useState<{ candidates: number; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
+  const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -202,7 +207,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     adaptiveSearchRef.current.reset();
     timingRef.current.reset();
     loadRef.current.reset();
-    setTelemetry({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
+    consensusRef.current.reset();
+    setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -282,6 +288,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       processingDurationMs += rankedResult.durationMs;
       const load = loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
       const best = ranked[0];
+      const consensus = consensusRef.current.observe(ranked.map((candidate) => ({ key: candidate.key, quality: candidate.analysis.quality, transform: candidate.transform })));
       const score = best?.analysis.quality ?? 0;
       const percent = Math.round(score * 100);
       setQuality(percent);
@@ -290,6 +297,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         lastTelemetryRef.current = timestamp;
         setTelemetry({
           candidates: current.candidates.length,
+          consensus,
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
           load,
@@ -299,7 +307,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       }
 
       const decision = adaptiveSearchRef.current.observe({
-        bestKey: best?.key,
+        bestKey: best ? `${best.key}:${best.transform}` : undefined,
         quality: score,
         sampleDurationMs: processingDurationMs,
       });
@@ -308,6 +316,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         evidenceRef.current.clear();
         setTelemetry({
           candidates: opticalSearchCandidateLabel(decision.tier),
+          consensus,
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
           load,
@@ -353,6 +362,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
 
           const canAttemptDecode =
             candidate.analysis.quality >= DECODE_QUALITY &&
+            bucket.frames.length >= 2 &&
+            consensusRef.current.canDecode(candidate.transform) &&
             timestamp - lastSuccessRef.current > 1200;
           if (!canAttemptDecode) continue;
 
@@ -391,6 +402,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           onDecoded(recovered);
         } else if (v2Rank > 0) {
           setMessage({ kind: "fountain", rank: v2Rank, percent });
+        } else if (score >= DECODE_QUALITY && consensus.state === "ambiguous") {
+          setMessage({ kind: "ambiguous" });
         } else if (score >= DECODE_QUALITY) {
           setMessage({
             kind: "boundary",
@@ -401,6 +414,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           setMessage({ kind: "candidate", percent });
         }
       } else {
+        consensusRef.current.observe([]);
         const healthState = best?.captureHealth?.state;
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
@@ -445,8 +459,9 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       adaptiveSearchRef.current.reset();
       timingRef.current.reset();
       loadRef.current.reset();
+      consensusRef.current.reset();
       lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
+      setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -474,7 +489,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span>{telemetry.timing.fps ? `${telemetry.load.processingMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
           <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
           <span className="health-pill">DR {telemetry.health ? Math.round(telemetry.health.score * 100) : "—"}</span>
-          <span>CYAN Δ</span>
+          <span className={`consensus-pill ${telemetry.consensus.state}`}>C{telemetry.consensus.state === "measuring" ? "—" : Math.round(telemetry.consensus.confidence * 100)}</span>
           <span className={`timing-pill ${telemetry.timing.state} ${telemetry.load.state}`}>{telemetry.timing.state === "measuring" ? "J— · L—" : `J${Math.round(telemetry.timing.jitterMs)} · L${Math.round(telemetry.load.utilization * 100)}`}</span>
         </div>
         <div

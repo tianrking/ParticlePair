@@ -28,6 +28,7 @@ import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, 
 import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adaptive-optical-search";
 import { FrameTimingEstimator, selectPhaseReference } from "../lib/frame-timing";
 import { ScanLoadController } from "../lib/scan-load";
+import { CandidateConsensus } from "../lib/candidate-consensus";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -170,6 +171,28 @@ test("isolated scan cost spikes do not trigger thermal backpressure", () => {
   const load = new ScanLoadController();
   load.observe(8, 33.3); load.observe(55, 33.3); load.observe(8, 33.3); load.observe(8, 33.3);
   assert.equal(load.snapshot().state, "normal");
+});
+
+test("candidate consensus permits crop movement while locking orientation", () => {
+  const consensus = new CandidateConsensus();
+  for (const key of ["crop-left", "crop-center", "crop-right"]) consensus.observe([
+    { key, quality: 0.82, transform: "rotate90" },
+    { key, quality: 0.8, transform: "mirror" },
+  ]);
+  const snapshot = consensus.snapshot();
+  assert.equal(snapshot.state, "stable"); assert.equal(snapshot.dominantTransform, "rotate90");
+  assert.ok(snapshot.geometryStability < 0.5); assert.equal(consensus.canDecode("rotate90"), true); assert.equal(consensus.canDecode("mirror"), false);
+});
+
+test("candidate consensus rejects alternating orientation winners and resets on loss", () => {
+  const consensus = new CandidateConsensus();
+  for (const transform of ["identity", "mirror", "identity", "mirror"]) consensus.observe([
+    { key: "crop", quality: 0.8, transform },
+    { key: "crop", quality: 0.77, transform: transform === "identity" ? "mirror" : "identity" },
+  ]);
+  assert.equal(consensus.snapshot().state, "ambiguous"); assert.equal(consensus.canDecode("identity"), false); assert.equal(consensus.canDecode("mirror"), false);
+  consensus.observe([{ key: "noise", quality: 0.12, transform: "identity" }]);
+  assert.equal(consensus.snapshot().state, "measuring"); assert.equal(consensus.snapshot().confidence, 0);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

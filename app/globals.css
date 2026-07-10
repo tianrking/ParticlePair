@@ -202,6 +202,9 @@ main { min-height:100vh; overflow:hidden; }
 .scanner-telemetry .timing-pill { color:#d8efff; border-color:rgba(88,183,255,.2); background:linear-gradient(135deg,rgba(16,61,109,.76),rgba(45,22,91,.76)); }
 .scanner-telemetry .timing-pill.jittery { color:#fff5e9; border-color:rgba(255,173,75,.36); background:linear-gradient(135deg,rgba(145,65,16,.84),rgba(91,24,94,.8)); box-shadow:0 0 18px rgba(255,132,48,.22); }
 .scanner-telemetry .timing-pill.cooling { color:#fff4fb; border-color:rgba(255,92,175,.38); background:linear-gradient(135deg,rgba(153,27,91,.84),rgba(65,30,128,.82)); box-shadow:0 0 18px rgba(255,52,157,.22); }
+.scanner-telemetry .consensus-pill { color:#ddd9ff; border-color:rgba(147,124,255,.24); background:linear-gradient(135deg,rgba(55,35,117,.78),rgba(14,48,88,.76)); }
+.scanner-telemetry .consensus-pill.stable { color:#e8fff9; border-color:rgba(75,255,202,.3); background:linear-gradient(135deg,rgba(7,112,91,.82),rgba(39,39,123,.78)); box-shadow:0 0 16px rgba(49,255,200,.16); }
+.scanner-telemetry .consensus-pill.ambiguous { color:#fff2fa; border-color:rgba(255,94,177,.38); background:linear-gradient(135deg,rgba(157,27,91,.84),rgba(75,28,122,.82)); box-shadow:0 0 18px rgba(255,54,158,.22); }
 .scanner-message { min-height:14px; margin:0; color:var(--muted); font-size:10px; text-align:center; }
 
 .decoded-panel { display:flex; flex-direction:column; }
