@@ -308,6 +308,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
               evidenceRef.current.clear();
               if (progress.complete && progress.secret && progress.secretHex) recovered = {
                 correctedCodewords: fragment.correctedCodewords,
+                protocolVersion: 2,
+                sessionId: progress.sessionId,
                 secret: progress.secret,
                 secretHex: progress.secretHex,
               };

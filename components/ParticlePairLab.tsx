@@ -30,6 +30,7 @@ import {
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
 import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
 import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow, v2SequenceAtTime } from "../lib/protocol-v2";
+import { derivePairingSas, type PairingSas } from "../lib/pairing-sas";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -113,12 +114,16 @@ export function ParticlePairLab() {
   const [v2Dwell, setV2Dwell] = useState<600 | 900 | 1200>(900);
   const [v2Test, setV2Test] = useState<{ status: "idle" | "running" | "success" | "error"; detail: string }>({ status: "idle", detail: "Rendered fountain path not tested" });
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
+  const [senderSas, setSenderSas] = useState<(PairingSas & { key: string }) | null>(null);
+  const [receiverSas, setReceiverSas] = useState<(PairingSas & { key: string }) | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
   const [pixelTestStatus, setPixelTestStatus] = useState<TestStatus>("idle");
   const [pixelTestDetail, setPixelTestDetail] = useState<PixelDetail>({ kind: "idle" });
   const [pixelResult, setPixelResult] = useState<RenderedPixelLoopbackResult | null>(null);
   const copy = UI_COPY[language];
+  const senderSasKey = /^[0-9a-f]{32}$/i.test(secretHex) ? `${secretHex.toLowerCase()}:${protocolMode === 2 ? v2SessionId : 0}` : "";
+  const receiverSasKey = result ? `${result.secretHex}:${result.protocolVersion === 2 ? result.sessionId ?? 0 : 0}` : "";
 
   useEffect(() => {
     // Generate the initial secret only after hydration so it never appears in
@@ -184,6 +189,18 @@ export function ParticlePairLab() {
     const option = LANGUAGE_OPTIONS.find(({ code }) => code === language);
     document.documentElement.lang = option?.htmlLang ?? "en";
   }, [language]);
+
+  useEffect(() => {
+    if (!senderSasKey) return;
+    let cancelled = false; derivePairingSas(hexToBytes(secretHex), protocolMode === 2 ? v2SessionId : 0).then((sas) => { if (!cancelled) setSenderSas({ ...sas, key: senderSasKey }); });
+    return () => { cancelled = true; };
+  }, [protocolMode, secretHex, senderSasKey, v2SessionId]);
+
+  useEffect(() => {
+    if (!result || !receiverSasKey) return;
+    let cancelled = false; derivePairingSas(result.secret, result.protocolVersion === 2 ? result.sessionId ?? 0 : 0).then((sas) => { if (!cancelled) setReceiverSas({ ...sas, key: receiverSasKey }); });
+    return () => { cancelled = true; };
+  }, [receiverSasKey, result]);
 
   const validationFrame = useMemo(() => {
     try {
@@ -457,6 +474,7 @@ export function ParticlePairLab() {
             <div className="dwell-selector" aria-label="Fountain fragment timing">{([{ value: 600, label: "FAST", detail: "600 ms" }, { value: 900, label: "BALANCED", detail: "900 ms" }, { value: 1200, label: "ROBUST", detail: "1200 ms" }] as const).map((option) => <button type="button" key={option.value} aria-pressed={v2Dwell === option.value} className={v2Dwell === option.value ? "is-active" : ""} onClick={() => setV2Dwell(option.value)}><strong>{option.label}</strong><small>{option.detail}</small></button>)}</div>
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
+          {senderSas?.key === senderSasKey ? <div className="sas-signature"><div><span>HUMAN AUTHENTICATION</span><strong>{senderSas.words.join(" · ")}</strong></div><code>{senderSas.code}</code><i>Compare on both devices</i></div> : null}
           <div className="watch-frame">
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} renderQuality={renderQuality} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
@@ -578,6 +596,7 @@ export function ParticlePairLab() {
               <span className="success-ring">✓</span>
               <p>{copy.validFrame}</p>
               <code>{result.secretHex.match(/.{1,8}/g)?.join(" ")}</code>
+              {receiverSas?.key === receiverSasKey ? <div className="receiver-sas"><span>COMPARE ON SENDER</span><strong>{receiverSas.words.join(" · ")}</strong><code>{receiverSas.code}</code></div> : null}
               <dl><div><dt>{copy.correctedCodewords}</dt><dd>{result.correctedCodewords}</dd></div><div><dt>{copy.integrity}</dt><dd>CRC-16 ✓</dd></div></dl>
             </div>
           ) : (

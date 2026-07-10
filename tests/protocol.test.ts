@@ -21,6 +21,7 @@ import {
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES } from "../lib/visual-modes";
+import { derivePairingSas } from "../lib/pairing-sas";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
@@ -75,6 +76,11 @@ test("v2 dwell profiles align every usable pair to one fragment", () => {
     for (let offset = 300; offset < dwell; offset += 30) assert.equal(v2PairUsesSameFragment(dwell * 3 + offset, dwell), true);
     assert.equal(v2PairUsesSameFragment(dwell * 3, dwell), false);
   }
+});
+
+test("short authentication string is deterministic and session-bound", async () => {
+  const first = await derivePairingSas(SECRET, 0x12345678); const second = await derivePairingSas(SECRET, 0x12345678); const other = await derivePairingSas(SECRET, 0x12345679);
+  assert.deepEqual(first, second); assert.notDeepEqual(first, other); assert.match(first.code, /^[0-9A-F]{6}$/); assert.equal(first.words.length, 3);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

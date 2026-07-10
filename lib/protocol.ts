@@ -12,6 +12,8 @@ export interface DecodedParticleCode {
   secret: Uint8Array;
   secretHex: string;
   correctedCodewords: number;
+  protocolVersion?: 1 | 2;
+  sessionId?: number;
 }
 
 export function bytesToHex(bytes: Uint8Array): string {
@@ -79,5 +81,5 @@ export function decodeParticleCode(bits: readonly boolean[]): DecodedParticleCod
   }
 
   const secret = packet.slice(3, 19);
-  return { secret, secretHex: bytesToHex(secret), correctedCodewords };
+  return { secret, secretHex: bytesToHex(secret), correctedCodewords, protocolVersion: 1 };
 }
