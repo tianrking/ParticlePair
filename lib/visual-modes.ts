@@ -24,6 +24,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "ink", name: "Ink Diffusion", subtitle: "Chromatic fluid clouds", kind: "clouds", colors: ["#ff3cac", "#784ba0", "#2b86c5"], icon: "◌" },
   { id: "weave", name: "Weave Protocol", subtitle: "Luminous cipher threads", kind: "weave", colors: ["#2ee8df", "#ff6f8f", "#ffd166"], icon: "⌘" },
   { id: "kaleidoscope", name: "Kaleidoscope", subtitle: "Symmetric optical facets", kind: "facets", colors: ["#ff42a1", "#7c4dff", "#23d5ff"], icon: "✧" },
+  { id: "glyph", name: "Glyph Ritual", subtitle: "Concentric cipher rings", kind: "glyph", colors: ["#34f5c5", "#6d62ff", "#ff4ec7"], icon: "⌾" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
