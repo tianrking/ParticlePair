@@ -1,4 +1,4 @@
-import { GRID_SIZE } from "./optical-layout";
+import { GRID_SIZE, isBorderCell } from "./optical-layout";
 import { opticalPixelValue } from "./optical-color";
 import {
   decodeDifferentialFrames,
@@ -21,6 +21,9 @@ export interface RenderedPixelLoopbackResult {
   recoveredSecretHex: string;
   referenceImage: string;
 }
+
+export type CameraChannelProfile = "clean" | "low-light" | "exposure-drift" | "defocus" | "sensor-noise" | "partial-occlusion";
+export const CAMERA_CHANNEL_PROFILES: readonly CameraChannelProfile[] = ["clean", "low-light", "exposure-drift", "defocus", "sensor-noise", "partial-occlusion"];
 
 const PREVIEW_SIZE = 240;
 
@@ -109,6 +112,26 @@ function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
   return { preview, values };
 }
 
+function applyCameraChannel(source: HTMLCanvasElement, profile: CameraChannelProfile, phase: 0 | 1): HTMLCanvasElement {
+  if (profile === "clean" || profile === "sensor-noise" || profile === "partial-occlusion") return source;
+  const canvas = document.createElement("canvas"); canvas.width = source.width; canvas.height = source.height;
+  const context = canvas.getContext("2d", { alpha: false }); if (!context) return source;
+  if (profile === "low-light") context.filter = "brightness(55%) saturate(85%) contrast(112%)";
+  if (profile === "exposure-drift") context.filter = phase ? "brightness(122%)" : "brightness(78%)";
+  if (profile === "defocus") context.filter = `blur(${Math.max(1, Math.min(source.width, source.height) / 360)}px)`;
+  context.drawImage(source, 0, 0); return canvas;
+}
+
+function applySampleChannel(values: number[], profile: CameraChannelProfile, phase: 0 | 1): number[] {
+  if (profile === "sensor-noise") return values.map((value, index) => value + ((((index * 73 + phase * 41) % 17) - 8) * 0.9));
+  if (profile === "partial-occlusion") {
+    const payload = values.map((_, index) => index).filter((index) => !isBorderCell(index));
+    const erased = new Set([payload[13], payload[91], payload[181]]);
+    return values.map((value, index) => erased.has(index) ? 0 : value);
+  }
+  return values;
+}
+
 function createDifferenceImage(analysis: DifferentialFrameAnalysis): string {
   const cellCanvas = document.createElement("canvas");
   cellCanvas.width = GRID_SIZE;
@@ -162,15 +185,18 @@ export async function runRenderedPixelLoopback(
   strength: number,
   expectedSecretHex: string,
   mode: VisualModeId = "galaxy",
+  profile: CameraChannelProfile = "clean",
 ): Promise<RenderedPixelLoopbackResult> {
-  const reference = captureCanvasFrame(
-    renderPhaseFrame(canvas, cells, strength, 1200, mode),
-  );
-  const current = captureCanvasFrame(
+  const reference = captureCanvasFrame(applyCameraChannel(
+    renderPhaseFrame(canvas, cells, strength, 1200, mode), profile, 0,
+  ));
+  const current = captureCanvasFrame(applyCameraChannel(
     // This now exercises the same 300 ms separation as a physical camera. The
     // decoration must cancel because its motion is phase-paired by the renderer.
-    renderPhaseFrame(canvas, cells, strength, 1500, mode),
-  );
+    renderPhaseFrame(canvas, cells, strength, 1500, mode), profile, 1,
+  ));
+  reference.values = applySampleChannel(reference.values, profile, 0);
+  current.values = applySampleChannel(current.values, profile, 1);
   const { analysis, decoded } = decodeDifferentialFrames(
     current.values,
     reference.values,

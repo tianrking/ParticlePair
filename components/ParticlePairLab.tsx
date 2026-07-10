@@ -15,7 +15,9 @@ import {
   type DecodedParticleCode,
 } from "../lib/protocol";
 import {
+  CAMERA_CHANNEL_PROFILES,
   runRenderedPixelLoopback,
+  type CameraChannelProfile,
   type RenderedPixelLoopbackResult,
 } from "../lib/rendered-pixel-loopback";
 import {
@@ -88,6 +90,8 @@ export function ParticlePairLab() {
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
+  const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -237,6 +241,22 @@ export function ParticlePairLab() {
     }
     setMatrixFailures(failures);
     setMatrixStatus(failures.length ? "error" : "success");
+  };
+
+  const runChannelSuite = async () => {
+    const canvas = particleCanvasRef.current;
+    if (!canvas || !validSecret) return;
+    setChannelStatus("running"); setChannelResults({});
+    const results: Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>> = {};
+    for (const profile of CAMERA_CHANNEL_PROFILES) {
+      try {
+        const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, visualMode, profile);
+        results[profile] = { ok: decoded.matchesExpected, quality: Math.round(decoded.quality * 100), corrected: decoded.correctedCodewords };
+      } catch { results[profile] = { ok: false, quality: 0, corrected: 0 }; }
+      setChannelResults({ ...results });
+      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    setChannelStatus(Object.values(results).every((result) => result.ok) ? "success" : "error");
   };
 
   const runLoopbackTest = () => {
@@ -429,6 +449,11 @@ export function ParticlePairLab() {
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
           </button>
           <div className={`matrix-result ${matrixStatus}`}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
+          <button className="secondary-button full-width channel-button" type="button" disabled={!validSecret || channelStatus === "running" || paused} onClick={runChannelSuite}>{channelStatus === "running" ? "SIMULATING CAMERA CHANNEL…" : "RUN CAMERA STRESS SUITE"}</button>
+          <div className={`channel-suite ${channelStatus}`}>
+            <div className="channel-suite-heading"><span>CAMERA CHANNEL LAB</span><strong>{selectedVisualMode.name}</strong><i>{channelStatus === "success" ? "6/6 PASS" : channelStatus === "error" ? `${Object.values(channelResults).filter((result) => result.ok).length}/6 PASS` : "NOT RUN"}</i></div>
+            <div className="channel-profiles">{CAMERA_CHANNEL_PROFILES.map((profile) => { const result = channelResults[profile]; return <div key={profile} className={result ? result.ok ? "pass" : "fail" : ""}><span>{profile.replaceAll("-", " ")}</span><strong>{result ? `${result.quality}%` : "—"}</strong><small>{result ? result.ok ? `CRC · ${result.corrected} FIX` : "REJECTED" : "WAITING"}</small></div>; })}</div>
+          </div>
         </article>
 
         <article className="panel receiver-panel">

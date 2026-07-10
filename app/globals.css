@@ -137,6 +137,19 @@ main { min-height:100vh; overflow:hidden; }
 .matrix-result.running span { background:#5d55ff; animation:pulse 1s infinite; }
 .matrix-result.success span { background:#1aa96b; box-shadow:0 0 0 4px rgba(26,169,107,.1); }
 .matrix-result.error span { background:var(--orange); }
+.channel-button { margin-top:10px; }
+.channel-suite { margin-top:8px; padding:12px; border:1px solid rgba(16,19,19,.1); border-radius:16px; background:linear-gradient(135deg,rgba(12,17,30,.98),rgba(32,20,58,.97)); color:white; box-shadow:0 12px 30px rgba(30,24,67,.12); }
+.channel-suite-heading { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px; }
+.channel-suite-heading span,.channel-suite-heading i { color:#8e99bc; font:650 7px/1 var(--font-geist-mono),monospace; letter-spacing:.09em; font-style:normal; }
+.channel-suite-heading strong { font-size:9px; }
+.channel-suite.success .channel-suite-heading i { color:#58f5c7; }.channel-suite.error .channel-suite-heading i { color:#ff7399; }
+.channel-profiles { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; margin-top:10px; }
+.channel-profiles>div { min-width:0; display:grid; grid-template-columns:1fr auto; gap:3px 6px; padding:8px; border:1px solid rgba(255,255,255,.08); border-radius:9px; background:rgba(255,255,255,.035); }
+.channel-profiles span { overflow:hidden; color:#b8bfd6; font:600 7px/1 var(--font-geist-mono),monospace; text-transform:uppercase; text-overflow:ellipsis; white-space:nowrap; }
+.channel-profiles strong { color:#8e99bc; font:700 8px/1 var(--font-geist-mono),monospace; }
+.channel-profiles small { grid-column:1/-1; color:#66708f; font:600 6px/1 var(--font-geist-mono),monospace; letter-spacing:.06em; }
+.channel-profiles .pass { border-color:rgba(66,255,190,.2); background:rgba(38,224,168,.055); }.channel-profiles .pass strong,.channel-profiles .pass small { color:#58eec3; }
+.channel-profiles .fail { border-color:rgba(255,80,132,.25); background:rgba(255,60,116,.06); }.channel-profiles .fail strong,.channel-profiles .fail small { color:#ff7399; }
 
 .scanner-shell { display:grid; gap:13px; }
 .camera-stage { position:relative; aspect-ratio:1.5; overflow:hidden; background:#171c1e; }
@@ -233,6 +246,7 @@ footer { max-width:1500px; margin:0 auto; padding:25px 34px; display:flex; justi
   .mode-intelligence dl { grid-template-columns:1fr; }
   .mode-toolbar { grid-template-columns:1fr; }
   .mode-toolbar>button { min-height:34px; }
+  .channel-profiles { grid-template-columns:repeat(2,1fr); }
   .particle-canvas,.watch-glass { border-radius:21px; }
   .optical-boundary { top:11px; height:calc(100% - 22px); }
   .watch-glass { inset:11px; }

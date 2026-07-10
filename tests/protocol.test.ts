@@ -18,7 +18,7 @@ import {
   OPTICAL_TRANSFORMS,
   transformOpticalSamples,
 } from "../lib/optical-decoder";
-import { rankOpticalFrameAnalyses } from "../lib/optical-search";
+import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES } from "../lib/visual-modes";
 
@@ -33,6 +33,17 @@ test("visual laboratory exposes exactly fifty documented unique modes", () => {
     assert.ok(mode.robustness.length > 24, `${mode.id} needs a robustness explanation`);
     assert.equal(mode.colors.length, 3);
   }
+});
+
+test("robust soft evidence rejects a low-quality outlier frame", () => {
+  const expected = Array.from({ length: CELL_COUNT }, (_, index) => index % 2 ? 12 : -12);
+  const combined = combineOpticalEvidence([
+    { differences: expected, quality: 0.92 }, { differences: expected.map((value) => value * 0.9), quality: 0.84 },
+    { differences: expected.map((value) => value * 1.1), quality: 0.88 }, { differences: expected.map((value) => value + 1), quality: 0.8 },
+    { differences: expected.map((value) => -value * 8), quality: 0.12 },
+  ]);
+  assert.ok(combined.differences.every((value, index) => Math.sign(value) === Math.sign(expected[index])));
+  assert.ok(combined.confidence.every((value) => value > 0.5));
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

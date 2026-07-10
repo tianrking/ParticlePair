@@ -8,7 +8,7 @@ import {
   PHASE_DURATION_MS,
 } from "../lib/optical-layout";
 import {
-  averageOpticalEvidence,
+  combineOpticalEvidence,
   rankOpticalFrameAnalyses,
   type OpticalSampleCandidate,
   type OpticalSampleFrame,
@@ -27,7 +27,7 @@ interface OpticalScannerProps {
 }
 
 interface EvidenceBucket {
-  frames: number[][];
+  frames: { differences: number[]; quality: number }[];
   lastTimestamp: number;
 }
 
@@ -271,7 +271,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           const oriented = candidate.analysis.differences.map(
             (difference) => difference * candidate.analysis.orientation,
           );
-          bucket.frames.push(oriented);
+          bucket.frames.push({ differences: oriented, quality: candidate.analysis.quality });
           bucket.lastTimestamp = timestamp;
           if (bucket.frames.length > MAX_ACCUMULATED_FRAMES) {
             bucket.frames.shift();
@@ -285,8 +285,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           if (!canAttemptDecode) continue;
 
           try {
-            const averaged = averageOpticalEvidence(bucket.frames);
-            const cells = averaged.map((difference) => difference > 0);
+            const combined = combineOpticalEvidence(bucket.frames);
+            const cells = combined.differences.map((difference) => difference > 0);
             recovered = decodeParticleCode(extractPayloadBits(cells));
             break;
           } catch {

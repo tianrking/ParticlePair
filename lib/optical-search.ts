@@ -61,3 +61,24 @@ export function averageOpticalEvidence(frames: readonly number[][]): number[] {
     frames.reduce((sum, frame) => sum + frame[cellIndex], 0) / frames.length,
   );
 }
+
+export interface WeightedOpticalEvidence {
+  confidence: number[];
+  differences: number[];
+}
+
+/** Robust soft combiner: quality-weighted, cell-wise winsorized evidence. */
+export function combineOpticalEvidence(
+  frames: readonly { differences: readonly number[]; quality: number }[],
+): WeightedOpticalEvidence {
+  if (!frames.length) return { confidence: Array(CELL_COUNT).fill(0), differences: Array(CELL_COUNT).fill(0) };
+  const differences = Array.from({ length: CELL_COUNT }, (_, cellIndex) => {
+    const samples = frames.map((frame) => ({ value: frame.differences[cellIndex], weight: Math.max(0.05, frame.quality ** 2) })).sort((left, right) => left.value - right.value);
+    const usable = samples.length >= 5 ? samples.slice(1, -1) : samples;
+    const weight = usable.reduce((sum, sample) => sum + sample.weight, 0) || 1;
+    return usable.reduce((sum, sample) => sum + sample.value * sample.weight, 0) / weight;
+  });
+  const magnitudes = differences.map(Math.abs).sort((left, right) => left - right);
+  const reference = magnitudes[Math.floor(magnitudes.length * 0.72)] || 1;
+  return { differences, confidence: differences.map((value) => Math.min(1, Math.abs(value) / reference)) };
+}
