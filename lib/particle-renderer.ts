@@ -46,17 +46,6 @@ export interface ParticleFrameOptions {
   width: number;
 }
 
-/**
- * Decorative motion repeats after one optical phase. Frames separated by
- * PHASE_DURATION_MS therefore contain identical decoration, allowing a real
- * camera differential to cancel it while the particles still move on screen.
- */
-export function pairedParticleMotionPhase(time: number): number {
-  const wrapped =
-    ((time % PHASE_DURATION_MS) + PHASE_DURATION_MS) % PHASE_DURATION_MS;
-  return (wrapped / PHASE_DURATION_MS) * Math.PI * 2;
-}
-
 /** Render one complete optical frame. An explicit phase makes iOS diagnostics deterministic. */
 export function renderParticleFrame({
   cells,
@@ -122,10 +111,12 @@ export function renderParticleFrame({
     );
   }
 
-  const motionPhase = pairedParticleMotionPhase(time);
-  const rotation = Math.sin(motionPhase) * 0.11;
+  // Keep the original drifting/rotating character, but make the decorative
+  // layer slower and dimmer than the optical carrier so 300 ms camera
+  // differences remain dominated by the encoded cell glows.
+  const rotation = time * 0.000055;
   for (const particle of PARTICLES) {
-    const wave = Math.sin(motionPhase + particle.angle * 3.1) * 0.045;
+    const wave = Math.sin(time * 0.00035 + particle.angle * 3.1) * 0.045;
     const radius = (particle.radius + wave) * side * 0.43;
     const angle = particle.angle + rotation * particle.speed * 6;
     const perspective = 0.76 + particle.depth * 0.3;
@@ -134,7 +125,7 @@ export function renderParticleFrame({
       centerY +
       Math.sin(angle) * radius * (0.72 + particle.depth * 0.24);
     const shimmer =
-      0.42 + Math.sin(motionPhase + particle.angle * 9) * 0.18;
+      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.34;
 
     context.beginPath();
     context.fillStyle = `hsla(${particle.hue}, 92%, 68%, ${shimmer})`;
