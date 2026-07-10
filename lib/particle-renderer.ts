@@ -25,7 +25,7 @@ function mulberry32(seed: number): () => number {
 
 const PARTICLES: readonly Particle[] = (() => {
   const random = mulberry32(0x50434f44);
-  return Array.from({ length: 620 }, (): Particle => ({
+  return Array.from({ length: 900 }, (): Particle => ({
     angle: random() * Math.PI * 2,
     radius: Math.pow(random(), 0.58),
     depth: random(),
@@ -90,7 +90,7 @@ export function renderParticleFrame({
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
       0.052 +
-      (positive ? strength : -strength) * 0.15 * borderBoost;
+      (positive ? strength : -strength) * 0.17 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -126,14 +126,16 @@ export function renderParticleFrame({
       centerY +
       Math.sin(angle) * radius * (0.72 + particle.depth * 0.24);
     const shimmer =
-      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.36;
+      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) *
+      0.28 *
+      (0.82 + particle.depth * 0.28);
 
     context.beginPath();
     context.fillStyle = `hsla(${particle.hue}, 100%, ${56 + particle.depth * 14}%, ${shimmer})`;
     context.arc(
       x,
       y,
-      particle.size * pixelRatio * (0.7 + particle.depth),
+      particle.size * pixelRatio * (0.72 + particle.depth * 1.08),
       0,
       Math.PI * 2,
     );
