@@ -21,6 +21,7 @@ import {
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES } from "../lib/visual-modes";
+import { decodeV2Fragment, encodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -44,6 +45,20 @@ test("robust soft evidence rejects a low-quality outlier frame", () => {
   ]);
   assert.ok(combined.differences.every((value, index) => Math.sign(value) === Math.sign(expected[index])));
   assert.ok(combined.confidence.every((value) => value > 0.5));
+});
+
+test("v2 fountain fragments recover out of order with loss and duplicates", () => {
+  const minute = 30_000_000; const session = 0x8a4c12ef; const decoder = new V2FountainDecoder();
+  const sequence = [4, 4, 5, 9, 1]; let result;
+  for (const index of sequence) result = decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, index), minute));
+  assert.equal(result?.complete, true); assert.deepEqual(result?.secret, SECRET);
+});
+
+test("v2 rejects expired fragments and completed-session replay", () => {
+  const minute = 30_000_000; const session = 0x10203040; const decoder = new V2FountainDecoder();
+  assert.throws(() => decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 0), minute + 11));
+  for (let sequence = 0; sequence < 4; sequence += 1) decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, sequence), minute));
+  assert.throws(() => decoder.add(decodeV2Fragment(encodeV2Fragment(SECRET, session, minute, 4), minute)));
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

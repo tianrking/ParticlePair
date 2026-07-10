@@ -1,11 +1,13 @@
-import { GRID_SIZE, isBorderCell } from "./optical-layout";
+import { extractPayloadBits, GRID_SIZE, isBorderCell, layoutBits } from "./optical-layout";
 import { opticalPixelValue } from "./optical-color";
 import {
   decodeDifferentialFrames,
+  analyzeDifferentialFrames,
   type DifferentialFrameAnalysis,
 } from "./optical-decoder";
 import { renderParticleFrame } from "./particle-renderer";
 import type { VisualModeId } from "./visual-modes";
+import { decodeV2Fragment, encodeV2Fragment, V2FountainDecoder } from "./protocol-v2";
 
 interface CapturedCanvasFrame {
   preview: HTMLCanvasElement;
@@ -24,6 +26,8 @@ export interface RenderedPixelLoopbackResult {
 
 export type CameraChannelProfile = "clean" | "low-light" | "exposure-drift" | "defocus" | "sensor-noise" | "partial-occlusion";
 export const CAMERA_CHANNEL_PROFILES: readonly CameraChannelProfile[] = ["clean", "low-light", "exposure-drift", "defocus", "sensor-noise", "partial-occlusion"];
+
+export interface RenderedV2LoopbackResult { fragments: number; ranks: number[]; recoveredSecretHex: string; }
 
 const PREVIEW_SIZE = 240;
 
@@ -211,4 +215,27 @@ export async function runRenderedPixelLoopback(
     recoveredSecretHex: decoded.secretHex,
     referenceImage: reference.preview.toDataURL("image/png"),
   };
+}
+
+/** Full v2 optical path: five rendered fragments, one duplicate, then GF(2) recovery. */
+export async function runRenderedV2FountainLoopback(
+  canvas: HTMLCanvasElement,
+  secret: Uint8Array,
+  strength: number,
+  mode: VisualModeId,
+  sessionId: number,
+  issuedMinute: number,
+): Promise<RenderedV2LoopbackResult> {
+  const decoder = new V2FountainDecoder(); const ranks: number[] = []; const sequence = [4, 4, 5, 9, 1];
+  for (const fragmentSequence of sequence) {
+    const cells = layoutBits(encodeV2Fragment(secret, sessionId, issuedMinute, fragmentSequence));
+    const reference = captureCanvasFrame(renderPhaseFrame(canvas, cells, strength, 1200, mode));
+    const current = captureCanvasFrame(renderPhaseFrame(canvas, cells, strength, 1500, mode));
+    const analysis = analyzeDifferentialFrames(current.values, reference.values);
+    const fragment = decodeV2Fragment(extractPayloadBits(analysis.cells), issuedMinute);
+    const progress = decoder.add(fragment); ranks.push(progress.rank);
+    if (progress.complete && progress.secretHex) return { fragments: ranks.length, ranks, recoveredSecretHex: progress.secretHex };
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  }
+  throw new Error("Rendered v2 fountain stream did not reach rank four");
 }

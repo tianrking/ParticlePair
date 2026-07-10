@@ -19,6 +19,7 @@ import {
 } from "../lib/camera-geometry";
 import { opticalPixelValue } from "../lib/optical-color";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
+import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 
 interface OpticalScannerProps {
@@ -136,6 +137,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const historyRef = useRef<OpticalSampleFrame[]>([]);
   const evidenceRef = useRef<Map<string, EvidenceBucket>>(new Map());
   const lastSuccessRef = useRef(0);
+  const v2DecoderRef = useRef(new V2FountainDecoder());
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
@@ -161,6 +163,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     runningRef.current = false;
     historyRef.current = [];
     evidenceRef.current.clear();
+    v2DecoderRef.current = new V2FountainDecoder();
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -254,6 +257,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       if (best && score > SIGNAL_QUALITY) {
         let recovered: DecodedParticleCode | null = null;
         let accumulatedFrames = 0;
+        let v2Rank = 0;
 
         for (const candidate of ranked) {
           if (
@@ -287,7 +291,20 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           try {
             const combined = combineOpticalEvidence(bucket.frames);
             const cells = combined.differences.map((difference) => difference > 0);
-            recovered = decodeParticleCode(extractPayloadBits(cells));
+            const bits = extractPayloadBits(cells);
+            try {
+              recovered = decodeParticleCode(bits);
+            } catch {
+              const fragment = decodeV2Fragment(bits);
+              const progress = v2DecoderRef.current.add(fragment);
+              v2Rank = progress.rank;
+              evidenceRef.current.clear();
+              if (progress.complete && progress.secret && progress.secretHex) recovered = {
+                correctedCodewords: fragment.correctedCodewords,
+                secret: progress.secret,
+                secretHex: progress.secretHex,
+              };
+            }
             break;
           } catch {
             // Keep collecting soft evidence for this crop and orientation.
@@ -305,7 +322,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         } else if (score >= DECODE_QUALITY) {
           setMessage({
             kind: "boundary",
-            frames: Math.min(3, accumulatedFrames),
+            frames: v2Rank || Math.min(3, accumulatedFrames),
             percent,
           });
         } else {
@@ -350,6 +367,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       await video.play();
       historyRef.current = [];
       evidenceRef.current.clear();
+      v2DecoderRef.current = new V2FountainDecoder();
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });

@@ -17,6 +17,7 @@ import {
 import {
   CAMERA_CHANNEL_PROFILES,
   runRenderedPixelLoopback,
+  runRenderedV2FountainLoopback,
   type CameraChannelProfile,
   type RenderedPixelLoopbackResult,
 } from "../lib/rendered-pixel-loopback";
@@ -28,6 +29,7 @@ import {
 } from "../lib/i18n";
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
 import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
+import { encodeV2Fragment, v2MinuteNow } from "../lib/protocol-v2";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -43,6 +45,10 @@ type Copy = (typeof UI_COPY)[Language];
 
 function randomSecretHex(): string {
   return bytesToHex(createRandomSecret());
+}
+
+function randomSessionId(): number {
+  const value = new Uint32Array(1); crypto.getRandomValues(value); return value[0];
 }
 
 function loopDetailText(detail: LoopDetail, copy: Copy): string {
@@ -98,6 +104,11 @@ export function ParticlePairLab() {
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
   const [calibrationStatus, setCalibrationStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [calibrationFloor, setCalibrationFloor] = useState<number | null>(null);
+  const [protocolMode, setProtocolMode] = useState<1 | 2>(1);
+  const [v2SessionId, setV2SessionId] = useState(0);
+  const [v2IssuedMinute, setV2IssuedMinute] = useState(0);
+  const [v2Sequence, setV2Sequence] = useState(0);
+  const [v2Test, setV2Test] = useState<{ status: "idle" | "running" | "success" | "error"; detail: string }>({ status: "idle", detail: "Rendered fountain path not tested" });
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -111,6 +122,7 @@ export function ParticlePairLab() {
     // server-rendered HTML and cannot diverge between the server and iOS Safari.
     const initializationFrame = window.requestAnimationFrame(() => {
       setSecretHex(randomSecretHex());
+      setV2SessionId(randomSessionId()); setV2IssuedMinute(v2MinuteNow());
       try {
         const savedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
         if (isLanguage(savedLanguage)) {
@@ -138,6 +150,21 @@ export function ParticlePairLab() {
   }, [autoShowcase]);
 
   useEffect(() => {
+    if (protocolMode !== 2 || paused) return;
+    const updateSequence = () => setV2Sequence(Math.floor(performance.now() / 600) % 15);
+    updateSequence(); const interval = window.setInterval(updateSequence, 60);
+    return () => window.clearInterval(interval);
+  }, [paused, protocolMode]);
+
+  useEffect(() => {
+    if (protocolMode !== 2) return;
+    const rotateSession = window.setInterval(() => {
+      if (v2MinuteNow() - v2IssuedMinute >= 8) { setV2SessionId(randomSessionId()); setV2IssuedMinute(v2MinuteNow()); setV2Sequence(0); }
+    }, 30_000);
+    return () => window.clearInterval(rotateSession);
+  }, [protocolMode, v2IssuedMinute]);
+
+  useEffect(() => {
     if (!immersive) return;
     const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersive(false); };
     document.body.classList.add("is-immersive");
@@ -150,13 +177,19 @@ export function ParticlePairLab() {
     document.documentElement.lang = option?.htmlLang ?? "en";
   }, [language]);
 
-  const frame = useMemo(() => {
+  const validationFrame = useMemo(() => {
     try {
       return layoutBits(encodeParticleCode(hexToBytes(secretHex)));
     } catch {
       return layoutBits(encodeParticleCode(new Uint8Array(16)));
     }
   }, [secretHex]);
+
+  const frame = useMemo(() => {
+    if (protocolMode === 1) return validationFrame;
+    try { return layoutBits(encodeV2Fragment(hexToBytes(secretHex), v2SessionId, v2IssuedMinute, v2Sequence)); }
+    catch { return validationFrame; }
+  }, [protocolMode, secretHex, v2IssuedMinute, v2Sequence, v2SessionId, validationFrame]);
 
   const selectLanguage = (nextLanguage: Language) => {
     setLanguage(nextLanguage);
@@ -169,6 +202,7 @@ export function ParticlePairLab() {
 
   const regenerate = () => {
     setSecretHex(randomSecretHex());
+    setV2SessionId(randomSessionId()); setV2IssuedMinute(v2MinuteNow()); setV2Sequence(0);
     setResult(null);
     setPixelResult(null);
     setPixelTestStatus("idle");
@@ -205,7 +239,7 @@ export function ParticlePairLab() {
     setPixelResult(null);
 
     try {
-      const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, visualMode);
+      const decoded = await runRenderedPixelLoopback(canvas, validationFrame, strength, secretHex, visualMode);
       setPixelResult(decoded);
       setResult({
         correctedCodewords: decoded.correctedCodewords,
@@ -231,6 +265,16 @@ export function ParticlePairLab() {
     }
   };
 
+  const runV2Loopback = async () => {
+    const canvas = particleCanvasRef.current; if (!canvas || !validSecret) return;
+    setV2Test({ status: "running", detail: "Rendering fountain equations…" });
+    try {
+      const decoded = await runRenderedV2FountainLoopback(canvas, hexToBytes(secretHex), strength, visualMode, v2SessionId, v2IssuedMinute);
+      if (decoded.recoveredSecretHex !== secretHex.toLowerCase()) throw new Error("Recovered secret mismatch");
+      setV2Test({ status: "success", detail: `${decoded.fragments} optical fragments · rank ${decoded.ranks.join("→")} · CRC passed` });
+    } catch { setV2Test({ status: "error", detail: "Rendered fountain recovery failed" }); }
+  };
+
   const runModeMatrix = async () => {
     const canvas = particleCanvasRef.current;
     if (!canvas || !validSecret) return;
@@ -239,7 +283,7 @@ export function ParticlePairLab() {
     for (let index = 0; index < VISUAL_MODES.length; index += 1) {
       const mode = VISUAL_MODES[index];
       try {
-        const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, mode.id);
+        const decoded = await runRenderedPixelLoopback(canvas, validationFrame, strength, secretHex, mode.id);
         if (!decoded.matchesExpected) failures.push(mode.name);
       } catch { failures.push(mode.name); }
       setMatrixProgress(index + 1);
@@ -256,7 +300,7 @@ export function ParticlePairLab() {
     const results: Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>> = {};
     for (const profile of CAMERA_CHANNEL_PROFILES) {
       try {
-        const decoded = await runRenderedPixelLoopback(canvas, frame, strength, secretHex, visualMode, profile);
+        const decoded = await runRenderedPixelLoopback(canvas, validationFrame, strength, secretHex, visualMode, profile);
         results[profile] = { ok: decoded.matchesExpected, quality: Math.round(decoded.quality * 100), corrected: decoded.correctedCodewords };
       } catch { results[profile] = { ok: false, quality: 0, corrected: 0 }; }
       setChannelResults({ ...results });
@@ -269,7 +313,7 @@ export function ParticlePairLab() {
     setQualityAuditStatus("running"); setQualityAuditProgress(0); setAutoShowcase(false);
     const grades: Record<string, VisualQualityMetrics> = {};
     for (let index = 0; index < VISUAL_MODES.length; index += 1) {
-      const mode = VISUAL_MODES[index]; grades[mode.id] = analyzeVisualModeQuality(frame, strength, mode.id);
+      const mode = VISUAL_MODES[index]; grades[mode.id] = analyzeVisualModeQuality(validationFrame, strength, mode.id);
       setVisualGrades({ ...grades }); setQualityAuditProgress(index + 1);
       if (index % 3 === 2) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
@@ -284,8 +328,8 @@ export function ParticlePairLab() {
     let floor: number | null = null;
     for (const candidate of candidates) {
       try {
-        const clean = await runRenderedPixelLoopback(canvas, frame, candidate, secretHex, visualMode, "clean");
-        const drift = await runRenderedPixelLoopback(canvas, frame, candidate, secretHex, visualMode, "exposure-drift");
+        const clean = await runRenderedPixelLoopback(canvas, validationFrame, candidate, secretHex, visualMode, "clean");
+        const drift = await runRenderedPixelLoopback(canvas, validationFrame, candidate, secretHex, visualMode, "exposure-drift");
         if (clean.matchesExpected && drift.matchesExpected && Math.min(clean.quality, drift.quality) >= 0.47) { floor = candidate; break; }
       } catch { /* Continue to the next stronger modulation candidate. */ }
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
@@ -300,7 +344,7 @@ export function ParticlePairLab() {
 
     window.setTimeout(() => {
       try {
-        const noisyCells = [...frame];
+        const noisyCells = [...validationFrame];
         const payloadIndices = noisyCells
           .map((_, index) => index)
           .filter((index) => !isBorderCell(index));
@@ -390,6 +434,12 @@ export function ParticlePairLab() {
               {paused ? "▶" : "Ⅱ"}
             </button>
           </div>
+          <div className="protocol-mode" aria-label="Optical protocol version">
+            <button type="button" aria-pressed={protocolMode === 1} className={protocolMode === 1 ? "is-active" : ""} onClick={() => setProtocolMode(1)}><span>V1</span><strong>STABLE FRAME</strong><small>Single-frame compatibility</small></button>
+            <button type="button" aria-pressed={protocolMode === 2} className={protocolMode === 2 ? "is-active" : ""} onClick={() => setProtocolMode(2)}><span>V2</span><strong>FOUNTAIN STREAM</strong><small>Loss-tolerant · anti-replay</small></button>
+            <div><span>SESSION</span><code>{v2SessionId.toString(16).padStart(8, "0")}</code><i>{protocolMode === 2 ? `EQ ${v2Sequence + 1}/15` : "READY"}</i></div>
+          </div>
+          <div className={`v2-proof ${v2Test.status}`}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? "TESTING V2…" : "V2 CANVAS PROOF"}</button><div><span>FOUNTAIN RECOVERY</span><strong>{v2Test.detail}</strong></div></div>
           <div className="watch-frame">
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} mode={visualMode} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
