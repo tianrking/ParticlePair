@@ -35,6 +35,25 @@ export const OPTICAL_TRANSFORMS = [
 ] as const;
 
 export type OpticalTransform = (typeof OPTICAL_TRANSFORMS)[number];
+export type OpticalQuadrant = "top-left" | "top-right" | "bottom-left" | "bottom-right";
+
+function sourceCoordinates(outputRow: number, outputColumn: number, size: number, transform: OpticalTransform): { column: number; row: number } {
+  const mirrored = transform.startsWith("mirror");
+  const rotation = transform.endsWith("Rotate90") ? 1 : transform.endsWith("Rotate180") ? 2 : transform.endsWith("Rotate270") ? 3 : transform === "rotate90" ? 1 : transform === "rotate180" ? 2 : transform === "rotate270" ? 3 : 0;
+  let row = outputRow; let column = outputColumn;
+  if (rotation === 1) { row = size - 1 - outputColumn; column = outputRow; }
+  else if (rotation === 2) { row = size - 1 - outputRow; column = size - 1 - outputColumn; }
+  else if (rotation === 3) { row = outputColumn; column = size - 1 - outputRow; }
+  if (mirrored) column = size - 1 - column;
+  return { column, row };
+}
+
+/** Map a canonical decoded quadrant back into the camera-observed orientation. */
+export function observedQuadrantForTransform(quadrant: OpticalQuadrant, transform: OpticalTransform): OpticalQuadrant {
+  const outputRow = quadrant.startsWith("bottom") ? 1 : 0; const outputColumn = quadrant.endsWith("right") ? 1 : 0;
+  const source = sourceCoordinates(outputRow, outputColumn, 2, transform);
+  return `${source.row ? "bottom" : "top"}-${source.column ? "right" : "left"}` as OpticalQuadrant;
+}
 
 /** Apply one of the eight square-grid symmetries to observed optical samples. */
 export function transformOpticalSamples(
@@ -45,40 +64,11 @@ export function transformOpticalSamples(
     throw new Error(`Optical samples must contain exactly ${CELL_COUNT} cells`);
   }
 
-  const mirrored = transform.startsWith("mirror");
-  const rotation = transform.endsWith("Rotate90")
-    ? 1
-    : transform.endsWith("Rotate180")
-      ? 2
-      : transform.endsWith("Rotate270")
-        ? 3
-        : transform === "rotate90"
-          ? 1
-          : transform === "rotate180"
-            ? 2
-            : transform === "rotate270"
-              ? 3
-              : 0;
-
   return Array.from({ length: CELL_COUNT }, (_, outputIndex) => {
     const outputRow = Math.floor(outputIndex / GRID_SIZE);
     const outputColumn = outputIndex % GRID_SIZE;
-    let sourceRow = outputRow;
-    let sourceColumn = outputColumn;
-
-    if (rotation === 1) {
-      sourceRow = GRID_SIZE - 1 - outputColumn;
-      sourceColumn = outputRow;
-    } else if (rotation === 2) {
-      sourceRow = GRID_SIZE - 1 - outputRow;
-      sourceColumn = GRID_SIZE - 1 - outputColumn;
-    } else if (rotation === 3) {
-      sourceRow = outputColumn;
-      sourceColumn = GRID_SIZE - 1 - outputRow;
-    }
-
-    if (mirrored) sourceColumn = GRID_SIZE - 1 - sourceColumn;
-    return samples[sourceRow * GRID_SIZE + sourceColumn];
+    const source = sourceCoordinates(outputRow, outputColumn, GRID_SIZE, transform);
+    return samples[source.row * GRID_SIZE + source.column];
   });
 }
 

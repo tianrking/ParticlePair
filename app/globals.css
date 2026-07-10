@@ -193,6 +193,9 @@ main { min-height:100vh; overflow:hidden; }
 .scan-frame i:nth-child(2) { right:-1px; top:-1px; border-width:2px 2px 0 0; }
 .scan-frame i:nth-child(3) { left:-1px; bottom:-1px; border-width:0 0 2px 2px; }
 .scan-frame i:nth-child(4) { right:-1px; bottom:-1px; border-width:0 2px 2px 0; }
+.scan-frame i.is-obstructed { border-color:#ff4fb7; filter:drop-shadow(0 0 7px rgba(255,55,165,.9)); animation:occlusionPulse .9s ease-in-out infinite alternate; }
+.scan-frame i.is-obstructed::after { content:""; position:absolute; inset:4px; border-radius:50%; background:radial-gradient(circle,#fff 0 18%,#ff62c1 24% 52%,rgba(131,77,255,.2) 70%); box-shadow:0 0 12px #ff4fb7; }
+@keyframes occlusionPulse { to { transform:scale(1.18); filter:drop-shadow(0 0 12px rgba(255,55,165,1)); } }
 .scan-quality { position:absolute; left:0; right:0; bottom:0; height:3px; background:rgba(255,255,255,.08); }
 .scan-quality span { display:block; height:100%; background:var(--cyan); transition:width .12s; }
 .scan-quality-label { position:absolute; top:9px; right:10px; padding:4px 6px; background:rgba(4,9,12,.66); color:rgba(232,249,249,.8); font-family:var(--font-geist-mono),monospace; font-size:7px; letter-spacing:.08em; }

@@ -1,11 +1,13 @@
 import { ENCODED_BITS } from "./protocol";
 import { GRID_SIZE, isBorderCell } from "./optical-layout";
+import type { OpticalQuadrant } from "./optical-decoder";
 
 export interface PayloadConfidenceSummary {
   canDecode: boolean;
   coverage: number;
   maxWeakWindow: number;
   state: "healthy" | "weak" | "occluded";
+  weakestQuadrant: OpticalQuadrant | null;
   weakQuadrants: number;
 }
 
@@ -25,6 +27,9 @@ export function analyzePayloadConfidence(cellConfidence: readonly number[]): Pay
   const quadrantWeak = [0, 0, 0, 0]; const quadrantTotal = [0, 0, 0, 0];
   for (const { index } of payload) { const row = Math.floor(index / GRID_SIZE) - 1; const column = index % GRID_SIZE - 1; const quadrant = (row >= 8 ? 2 : 0) + (column >= 8 ? 1 : 0); quadrantTotal[quadrant] += 1; if (weak.has(index)) quadrantWeak[quadrant] += 1; }
   const weakQuadrants = quadrantWeak.filter((count, quadrant) => count / quadrantTotal[quadrant] > 0.35).length;
+  const quadrantNames: OpticalQuadrant[] = ["top-left", "top-right", "bottom-left", "bottom-right"];
+  const weakestIndex = quadrantWeak.reduce((best, count, index) => count / quadrantTotal[index] > quadrantWeak[best] / quadrantTotal[best] ? index : best, 0);
+  const weakestQuadrant = quadrantWeak[weakestIndex] > 0 ? quadrantNames[weakestIndex] : null;
   const state: PayloadConfidenceSummary["state"] = maxWeakWindow >= 0.625 || weakQuadrants > 0 ? "occluded" : coverage < 0.78 ? "weak" : "healthy";
-  return { canDecode: coverage >= 0.72 && maxWeakWindow < 0.75, coverage, maxWeakWindow, state, weakQuadrants };
+  return { canDecode: coverage >= 0.72 && maxWeakWindow < 0.75, coverage, maxWeakWindow, state, weakestQuadrant, weakQuadrants };
 }

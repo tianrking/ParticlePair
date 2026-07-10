@@ -15,6 +15,7 @@ import {
 import {
   analyzeDifferentialDifferences,
   decodeDifferentialFrames,
+  observedQuadrantForTransform,
   OPTICAL_TRANSFORMS,
   transformOpticalSamples,
 } from "../lib/optical-decoder";
@@ -285,7 +286,16 @@ test("payload confidence tolerates sparse weak cells but detects localized occlu
   const blocked = Array<number>(CELL_COUNT).fill(1);
   for (let row = 5; row < 9; row += 1) for (let column = 5; column < 9; column += 1) blocked[row * 18 + column] = 0.05;
   const occluded = analyzePayloadConfidence(blocked);
-  assert.equal(occluded.state, "occluded"); assert.equal(occluded.canDecode, false); assert.equal(occluded.maxWeakWindow, 1);
+  assert.equal(occluded.state, "occluded"); assert.equal(occluded.canDecode, false); assert.equal(occluded.maxWeakWindow, 1); assert.equal(occluded.weakestQuadrant, "top-left");
+});
+
+test("canonical occlusion quadrants map back through every camera transform", () => {
+  const expected = { identity: "top-left", rotate90: "bottom-left", rotate180: "bottom-right", rotate270: "top-right", mirror: "top-right", mirrorRotate90: "bottom-right", mirrorRotate180: "bottom-left", mirrorRotate270: "top-left" } as const;
+  for (const transform of OPTICAL_TRANSFORMS) {
+    assert.equal(observedQuadrantForTransform("top-left", transform), expected[transform]);
+    const mapped = (["top-left", "top-right", "bottom-left", "bottom-right"] as const).map((quadrant) => observedQuadrantForTransform(quadrant, transform));
+    assert.equal(new Set(mapped).size, 4);
+  }
 });
 
 test("payload confidence labels diffuse low coverage separately from occlusion", () => {
