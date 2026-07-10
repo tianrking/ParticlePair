@@ -40,7 +40,7 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "timing" | "ambiguous" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "softfocus" | "timing" | "ambiguous" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
@@ -89,6 +89,8 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return language === "zh" ? "画面高光溢出 · 请降低屏幕亮度或稍微拉远" : language === "es" ? "Altas luces saturadas · reduce el brillo o aumenta la distancia" : "Highlights clipped · lower screen brightness or move slightly farther away";
     case "underexposed":
       return language === "zh" ? "有效动态范围不足 · 请避开强背光并保持屏幕完整入框" : language === "es" ? "Rango dinámico insuficiente · evita el contraluz y encuadra toda la pantalla" : "Dynamic range too low · avoid backlight and keep the full screen in frame";
+    case "softfocus":
+      return language === "zh" ? "同步边框清晰度不足 · 请轻点屏幕对焦或稍微拉远" : language === "es" ? "Borde de sincronía desenfocado · toca para enfocar o aumenta un poco la distancia" : "Sync border is soft · tap to focus or move slightly farther away";
     case "timing":
       return language === "zh" ? "相机帧间隔波动较大 · 请保持页面在前台并关闭省电模式" : language === "es" ? "Cadencia de cámara inestable · mantén la página visible y desactiva el ahorro de energía" : "Camera cadence is unstable · keep the page visible and disable battery saver";
     case "ambiguous":
@@ -416,7 +418,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       } else {
         consensusRef.current.observe([]);
         const healthState = best?.captureHealth?.state;
-        setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
+        setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : best?.captureHealth?.focusState === "soft" ? { kind: "softfocus" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
       loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
@@ -483,12 +485,12 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
-        <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"}`} aria-label="Scanner performance and dynamic range telemetry">
+        <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"} focus-${telemetry.health?.focusState ?? "unknown"}`} aria-label="Scanner performance, dynamic range, and focus telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
           <span>GEO {telemetry.candidates}</span>
           <span>{telemetry.timing.fps ? `${telemetry.load.processingMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
           <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
-          <span className="health-pill">DR {telemetry.health ? Math.round(telemetry.health.score * 100) : "—"}</span>
+          <span className="health-pill">{telemetry.health ? `DR${Math.round(telemetry.health.score * 100)} · F${Math.round(telemetry.health.focusScore * 100)}` : "DR— · F—"}</span>
           <span className={`consensus-pill ${telemetry.consensus.state}`}>C{telemetry.consensus.state === "measuring" ? "—" : Math.round(telemetry.consensus.confidence * 100)}</span>
           <span className={`timing-pill ${telemetry.timing.state} ${telemetry.load.state}`}>{telemetry.timing.state === "measuring" ? "J— · L—" : `J${Math.round(telemetry.timing.jitterMs)} · L${Math.round(telemetry.load.utilization * 100)}`}</span>
         </div>

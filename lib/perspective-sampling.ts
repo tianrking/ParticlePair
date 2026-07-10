@@ -1,3 +1,6 @@
+import { opticalPixelValue } from "./optical-color";
+import { GRID_SIZE, isBorderCell, synchronizationBit } from "./optical-layout";
+
 export interface Point2D { x: number; y: number }
 export interface PerspectiveQuad { bottomLeft: Point2D; bottomRight: Point2D; topLeft: Point2D; topRight: Point2D }
 export interface NamedPerspectiveQuad { key: string; quad: PerspectiveQuad }
@@ -5,6 +8,8 @@ export type PerspectiveSearchTier = "acquire" | "track" | "lock";
 export interface CameraCaptureHealth {
   clippedRatio: number;
   darkRatio: number;
+  focusScore: number;
+  focusState: "unknown" | "sharp" | "soft";
   opponentSpan: number;
   score: number;
   state: "healthy" | "clipped" | "dark" | "flat";
@@ -51,9 +56,13 @@ export function samplePerspectiveGridWithHealth(data: Uint8ClampedArray, width: 
   const sorted = [...values].sort((left, right) => left - right);
   const opponentSpan = sorted[Math.floor(sorted.length * 0.9)] - sorted[Math.floor(sorted.length * 0.1)];
   const clippedRatio = clipped / values.length; const darkRatio = dark / values.length;
+  const borderMean = (expected: boolean) => { const group = values.filter((_, index) => isBorderCell(index) && synchronizationBit(index) === expected); return group.reduce((sum, value) => sum + value, 0) / group.length; };
+  const borderSeparation = gridSize === GRID_SIZE ? Math.abs(borderMean(true) - borderMean(false)) : 0;
+  const focusScore = gridSize !== GRID_SIZE || opponentSpan < 22 ? 0 : Math.max(0, Math.min(1, borderSeparation / Math.max(24, opponentSpan * 0.72)));
+  const focusState: CameraCaptureHealth["focusState"] = gridSize !== GRID_SIZE || opponentSpan < 22 ? "unknown" : focusScore < 0.35 ? "soft" : "sharp";
   const score = Math.max(0, Math.min(1, 1 - clippedRatio * 2.4 - Math.max(0, darkRatio - 0.35) * 1.4 - Math.max(0, 28 - opponentSpan) / 28));
   const state: CameraCaptureHealth["state"] = clippedRatio > 0.16 ? "clipped" : darkRatio > 0.58 ? "dark" : opponentSpan < 22 ? "flat" : "healthy";
-  return { health: { clippedRatio, darkRatio, opponentSpan, score, state }, values };
+  return { health: { clippedRatio, darkRatio, focusScore, focusState, opponentSpan, score, state }, values };
 }
 
 export function samplePerspectiveGrid(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number): number[] {
@@ -77,4 +86,3 @@ export function perspectiveCandidatesForCrop(cropKey: string, size: number, tier
   if (tier === "track") return cropKey.endsWith(":0:0") ? candidates : candidates.slice(0, 1);
   return cropKey.endsWith(":0:0") || cropKey.startsWith("1:") ? candidates : candidates.slice(0, 1);
 }
-import { opticalPixelValue } from "./optical-color";

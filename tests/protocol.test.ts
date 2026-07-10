@@ -272,6 +272,15 @@ test("capture health separates useful range from clipping, darkness, and flat fr
   assert.equal(dark.state, "dark"); assert.equal(flat.state, "flat");
 });
 
+test("known synchronization border measures focus independently of vivid interior", () => {
+  const size = 36; const quad: PerspectiveQuad = { topLeft: { x: 0, y: 0 }, topRight: { x: 35, y: 0 }, bottomRight: { x: 35, y: 35 }, bottomLeft: { x: 0, y: 35 } };
+  const paint = (softBorder: boolean) => { const data = new Uint8ClampedArray(size * size * 4); for (let cell = 0; cell < CELL_COUNT; cell += 1) { const row = Math.floor(cell / 18); const column = cell % 18; const bright = isBorderCell(cell) ? synchronizationBit(cell) : (row + column) % 4 < 2; const color = isBorderCell(cell) && softBorder ? bright ? [30, 128, 108] : [28, 112, 96] : bright ? [36, 220, 184] : [18, 65, 54]; for (let dy = 0; dy < 2; dy += 1) for (let dx = 0; dx < 2; dx += 1) { const offset = (((row * 2 + dy) * size) + column * 2 + dx) * 4; data[offset] = color[0]; data[offset + 1] = color[1]; data[offset + 2] = color[2]; data[offset + 3] = 255; } } return data; };
+  const sharp = samplePerspectiveGridWithHealth(paint(false), size, size, quad, 18).health;
+  const soft = samplePerspectiveGridWithHealth(paint(true), size, size, quad, 18).health;
+  assert.equal(sharp.focusState, "sharp"); assert.ok(sharp.focusScore > 0.8);
+  assert.equal(soft.focusState, "soft"); assert.ok(soft.focusScore < 0.35); assert.equal(soft.state, "healthy");
+});
+
 test("chance-level border matches are removed from scanner confidence", () => {
   const differences = Array<number>(CELL_COUNT).fill(0);
   let borderIndex = 0;
