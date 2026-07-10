@@ -4,6 +4,7 @@ import {
   PHASE_DURATION_MS,
 } from "./optical-layout";
 import { visualMode, type VisualModeId } from "./visual-modes";
+import { drawArtisticScene } from "./artistic-scenes";
 
 interface Particle {
   angle: number;
@@ -146,8 +147,13 @@ export function renderParticleFrame({
     );
   }
 
+  if (selectedMode.kind !== "galaxy") {
+    drawArtisticScene({ context, height, mode: selectedMode, pixelRatio, time, width });
+  }
+
   const rotation = time * 0.000075;
   for (const particle of PARTICLES) {
+    if (selectedMode.kind !== "galaxy") break;
     const wave =
       Math.sin(time * 0.00028 + particle.angle * 2.6) *
       (0.016 + (1 - particle.depth) * 0.018);

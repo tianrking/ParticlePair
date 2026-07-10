@@ -15,6 +15,7 @@ export interface VisualMode {
 
 export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "galaxy", name: "Spiral Galaxy", subtitle: "Differential starlight", kind: "galaxy", colors: ["#3012ff", "#9d08ff", "#ff0aa6"], icon: "✦" },
+  { id: "aurora", name: "Aurora Veil", subtitle: "Luminous curtains", kind: "curtain", colors: ["#24ffd1", "#42a5ff", "#b76cff"], icon: "≈" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
