@@ -84,6 +84,7 @@ export function ParticlePairLab() {
   const [modeQuery, setModeQuery] = useState("");
   const [modeCategory, setModeCategory] = useState<"All" | VisualCategory>("All");
   const [autoShowcase, setAutoShowcase] = useState(false);
+  const [immersive, setImmersive] = useState(false);
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
@@ -125,6 +126,14 @@ export function ParticlePairLab() {
     }, 4200);
     return () => window.clearInterval(interval);
   }, [autoShowcase]);
+
+  useEffect(() => {
+    if (!immersive) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersive(false); };
+    document.body.classList.add("is-immersive");
+    window.addEventListener("keydown", onKeyDown);
+    return () => { document.body.classList.remove("is-immersive"); window.removeEventListener("keydown", onKeyDown); };
+  }, [immersive]);
 
   useEffect(() => {
     const option = LANGUAGE_OPTIONS.find(({ code }) => code === language);
@@ -170,6 +179,11 @@ export function ParticlePairLab() {
     setVisualMode(mode);
     setAutoShowcase(false);
     try { window.localStorage.setItem(MODE_STORAGE_KEY, mode); } catch { /* Persistence is optional. */ }
+  };
+
+  const stepVisualMode = (direction: -1 | 1) => {
+    const current = VISUAL_MODES.findIndex((mode) => mode.id === visualMode);
+    selectVisualMode(VISUAL_MODES[(current + direction + VISUAL_MODES.length) % VISUAL_MODES.length].id);
   };
 
   const runPixelLoopbackTest = async () => {
@@ -331,6 +345,7 @@ export function ParticlePairLab() {
             <label><span>SEARCH MODES</span><input value={modeQuery} onChange={(event) => setModeQuery(event.target.value)} placeholder="Galaxy, organic, glyph…" /></label>
             <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP SHOWCASE" : "AUTO SHOWCASE"}</button>
           </div>
+          <button className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>IMMERSIVE TRANSMIT</strong><small>Distraction-free optical stage</small></button>
           <div className="mode-categories" aria-label="Mode categories">
             {VISUAL_CATEGORIES.map((category) => <button key={category} type="button" className={modeCategory === category ? "is-active" : ""} onClick={() => setModeCategory(category)}>{category}</button>)}
           </div>
@@ -343,6 +358,7 @@ export function ParticlePairLab() {
           </div>
           <div className="mode-intelligence">
             <div className="mode-intelligence-heading"><span>{selectedVisualMode.category}</span><strong>{selectedVisualMode.name}</strong><i>{VISUAL_MODES.findIndex((mode) => mode.id === visualMode) + 1}/50</i></div>
+            <div className="mode-palette" aria-label="Mode color palette">{selectedVisualMode.colors.map((color) => <span key={color} style={{ backgroundColor: color }} />)}</div>
             <dl><div><dt>GENERATIVE ALGORITHM</dt><dd>{selectedVisualMode.algorithm}</dd></div><div><dt>CAMERA EXTRACTION</dt><dd>{selectedVisualMode.extraction}</dd></div><div><dt>ROBUSTNESS</dt><dd>{selectedVisualMode.robustness}</dd></div></dl>
           </div>
           <div className="strength-row">
@@ -446,6 +462,16 @@ export function ParticlePairLab() {
       </section>
 
       <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>ORBITACERO · PARTICLEPAIR · 2026</span></footer>
+      {immersive ? (
+        <section className="immersive-stage" role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
+          <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} />
+          <div className="immersive-glass" aria-hidden="true" />
+          <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE GENERATIVE OPTICAL LINK</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
+          <div className="immersive-meta"><span>{selectedVisualMode.category}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
+          <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><div><span className="live-dot" />TRANSMITTING · PHASE 300 MS · CRC-16</div><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
+          <div className="immersive-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
+        </section>
+      ) : null}
     </main>
   );
 }
