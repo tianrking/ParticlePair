@@ -35,7 +35,7 @@ function mode(id: string, name: string, subtitle: string, kind: SceneKind, categ
   return { id, name, subtitle, kind, category, colors, icon, ...ALGORITHMS[kind] };
 }
 
-export const VISUAL_MODES: readonly VisualMode[] = [
+const RAW_VISUAL_MODES: readonly VisualMode[] = [
   mode("galaxy", "Spiral Galaxy", "Differential starlight", "galaxy", "Cosmic", ["#3012ff", "#9d08ff", "#ff0aa6"], "✦"),
   mode("aurora", "Aurora Veil", "Luminous curtains", "curtain", "Atmospheric", ["#24ffd1", "#42a5ff", "#b76cff"], "≈"),
   mode("ripple", "Ripple Code", "Radial wavefronts", "rings", "Geometric", ["#24d9ff", "#5078ff", "#d56dff"], "◎"),
@@ -88,8 +88,55 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   mode("quantum-foam", "Quantum Foam", "Vacuum energy diffusion", "clouds", "Synthetic", ["#18f5ff", "#6854ff", "#ff45c6"], "∴"),
 ];
 
+function structuralDescription(kind: SceneKind, variant: number): string {
+  const percent = Math.round(variant * 100);
+  switch (kind) {
+    case "galaxy": return `Structural variant ${percent}:1 warps arm twist, radial falloff, and vertical compression.`;
+    case "curtain": return `Structural variant ${percent}:1 sets wave frequency and signed atmospheric horizon tilt.`;
+    case "rings": return `Structural variant ${percent}:1 uses ${9 + Math.floor(variant * 7)} offset wavefronts.`;
+    case "petals": return `Structural variant ${percent}:1 uses ${8 + Math.floor(variant * 8)} petals with a distinct aspect ratio.`;
+    case "orbits": return `Structural variant ${percent}:1 changes orbital eccentricity, phase spacing, and clock rate.`;
+    case "nodes": return `Structural variant ${percent}:1 uses graph stride ${3 + Math.floor(variant * 9)} and unique node scale.`;
+    case "tendrils": return `Structural variant ${percent}:1 uses ${10 + Math.floor(variant * 9)} tendrils with distinct flow amplitude.`;
+    case "clouds": return `Structural variant ${percent}:1 changes diffusion spiral, lobe radius, and vertical turbulence.`;
+    case "weave": return `Structural variant ${percent}:1 uses ${8 + Math.floor(variant * 7)} tilted strands and unique wavelength.`;
+    case "facets": return `Structural variant ${percent}:1 uses ${6 + Math.floor(variant * 8)}-fold crystalline symmetry.`;
+    case "glyph": return `Structural variant ${percent}:1 uses ${5 + Math.floor(variant * 4)} rings with a unique tick cadence.`;
+    case "city": return `Structural variant ${percent}:1 uses ${14 + Math.floor(variant * 9)} towers and a distinct skyline sequence.`;
+    case "embers": return `Structural variant ${percent}:1 changes plume spread, ascent height, and particle scale.`;
+  }
+}
+
+const PALETTE_REFINEMENTS: Readonly<Record<string, readonly [string, string, string]>> = {
+  bloom: ["#ff3d9e", "#ffbd4a", "#3fe7ff"],
+  constellation: ["#ffd76a", "#57e8ff", "#a56cff"],
+  glyph: ["#35ffd2", "#7560ff", "#ffaf45"],
+  hologram: ["#1fffe1", "#ff4fbd", "#ffbd3e"],
+  jellyfish: ["#39ffe1", "#6372ff", "#ff4f9a"],
+  mandala: ["#2affd5", "#ffbe3f", "#fc4dff"],
+  "plasma-core": ["#20fff0", "#ff4fa3", "#ffbf42"],
+  portal: ["#15ffd1", "#6270ff", "#ffad3d"],
+  pulsar: ["#ffd866", "#48dfff", "#a84cff"],
+  glacier: ["#47fff0", "#4894ff", "#ff4fa8"],
+  stardust: ["#00f5ff", "#8b3dff", "#ff176f"],
+};
+
+export const VISUAL_MODES: readonly VisualMode[] = RAW_VISUAL_MODES.map((candidate) => {
+  const family = RAW_VISUAL_MODES.filter((modeCandidate) => modeCandidate.kind === candidate.kind);
+  const variant = (family.findIndex((modeCandidate) => modeCandidate.id === candidate.id) + 0.5) / family.length;
+  return { ...candidate, colors: PALETTE_REFINEMENTS[candidate.id] ?? candidate.colors, algorithm: `${candidate.algorithm} ${structuralDescription(candidate.kind, variant)}` };
+});
+
 export const VISUAL_CATEGORIES: readonly ("All" | VisualCategory)[] = ["All", "Cosmic", "Organic", "Geometric", "Atmospheric", "Synthetic"];
 
 export function visualMode(id: VisualModeId): VisualMode {
   return VISUAL_MODES.find((candidate) => candidate.id === id) ?? VISUAL_MODES[0];
+}
+
+/** Evenly spaced structural parameter within a renderer family, stable across frames. */
+export function visualModeVariant(id: VisualModeId): number {
+  const selected = visualMode(id);
+  const family = VISUAL_MODES.filter((candidate) => candidate.kind === selected.kind);
+  const index = Math.max(0, family.findIndex((candidate) => candidate.id === selected.id));
+  return (index + 0.5) / family.length;
 }

@@ -269,7 +269,8 @@ ParticlePair separa la portadora óptica fiable de la capa artística generativa
 - 13 familias de renderizado: galaxias, cortinas, anillos, pétalos, órbitas, nodos, tentáculos, nubes, tejidos, facetas, glifos, ciudades y brasas.
 - Búsqueda, filtros, espectro propio por modo, presentación automática, selección persistente y escenario inmersivo.
 - Cada modo explica su algoritmo generativo, extracción de cámara y estrategia de robustez.
-- Visual Quality Engine mide viveza, contraste, cobertura cromática, continuidad de movimiento y nota compuesta sobre píxeles reales. Ninguno de los 50 modos actuales queda por debajo de 55.
+- Visual Quality Engine usa un portador canónico determinista, mide viveza, contraste, cobertura cromática, continuidad de movimiento y nota compuesta, y compara una huella 8×8 de color y movimiento con el modo más cercano de la misma familia. La base actual de 50 modos es 60 mínimo, 68 de media y 51 de distinción mínima; la auditoría falla por debajo de 60 de calidad o 40 de distinción.
+- Las variantes de una misma familia cambian la topología real, no solo la paleta: número de anillos, simetría de pétalos, paso del grafo, excentricidad orbital, ángulo del tejido, densidad urbana, arquitectura de glifos y flujo de partículas.
 - Camera Channel Lab prueba señal limpia, poca luz, deriva de exposición, desenfoque, ruido de sensor y oclusión parcial. Solo aprueba si el secreto coincide y pasa CRC.
 - La modulación adaptativa busca la intensidad mínima que supera los canales limpio y con deriva, y añade ocho puntos de margen.
 

@@ -269,7 +269,8 @@ ParticlePair now separates the reliable optical carrier from the generative art 
 - 13 renderer families: spiral fields, curtains, rings, petals, orbits, node graphs, tendrils, clouds, weaves, facets, glyphs, city grids, and embers.
 - Search, category filters, per-mode three-color spectra, automatic showcase, persistent selection, and an immersive transmission stage.
 - Every mode explains its generative algorithm, camera extraction path, and robustness strategy in the interface.
-- The Visual Quality Engine measures vibrancy, contrast, hue coverage, motion continuity, and a composite grade from real rendered pixels. The current 50-mode baseline has no mode below grade 55.
+- The deterministic Visual Quality Engine renders a canonical carrier, measures vibrancy, contrast, hue coverage, motion continuity, and a composite grade, then compares an 8×8 color-motion fingerprint against the nearest mode in the same renderer family. The current 50-mode baseline is 60 minimum, 68 average, and 51 minimum distinctness; the audit fails below 60 quality or 40 distinctness.
+- Renderer-family variants change actual topology—not only palettes—including ring count, petal symmetry, graph stride, orbit eccentricity, weave angle, skyline density, glyph architecture, and particle flow.
 - The Camera Channel Lab exercises clean, low-light, exposure-drift, defocus, sensor-noise, and partial-occlusion paths. A result counts only after the recovered secret matches and CRC passes.
 - Adaptive modulation searches for the quietest strength that survives both clean and exposure-drift channels, then adds an eight-point safety margin.
 

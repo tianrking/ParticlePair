@@ -1,9 +1,13 @@
 import { renderParticleFrame } from "./particle-renderer";
-import type { VisualModeId } from "./visual-modes";
+import { ENCODED_BITS } from "./protocol";
+import { layoutBits } from "./optical-layout";
+import { VISUAL_MODES, type VisualModeId } from "./visual-modes";
 
 export interface VisualQualityMetrics {
   contrast: number;
   coverage: number;
+  distinctness: number;
+  fingerprint: readonly number[];
   grade: number;
   motion: number;
   vibrancy: number;
@@ -22,8 +26,10 @@ function percentile(sorted: readonly number[], fraction: number): number {
 }
 
 export function analyzeVisualModeQuality(cells: readonly boolean[], strength: number, mode: VisualModeId): VisualQualityMetrics {
-  const first = renderAnalysisFrame(cells, strength, mode, 1200);
-  const second = renderAnalysisFrame(cells, strength, mode, 1800);
+  void cells;
+  const canonicalCells = layoutBits(Array.from({ length: ENCODED_BITS }, (_, index) => (index * 7 + Math.floor(index / 13) * 3) % 17 < 8));
+  const first = renderAnalysisFrame(canonicalCells, strength, mode, 1200);
+  const second = renderAnalysisFrame(canonicalCells, strength, mode, 1800);
   const luminances: number[] = [];
   const saturations: number[] = [];
   const hueBins = new Set<number>();
@@ -57,5 +63,31 @@ export function analyzeVisualModeQuality(cells: readonly boolean[], strength: nu
   const rawMotion = motionSum / Math.max(1, motionSamples) / 255;
   const motion = Math.round(Math.min(1, rawMotion / 0.032) * 100);
   const grade = Math.round(vibrancy * 0.34 + contrast * 0.28 + coverage * 0.2 + motion * 0.18);
-  return { contrast, coverage, grade, motion, vibrancy };
+  const rawFingerprint: number[] = [];
+  for (let row = 0; row < 8; row += 1) for (let column = 0; column < 8; column += 1) {
+    const x = Math.floor((column + 0.5) * first.width / 8); const y = Math.floor((row + 0.5) * first.height / 8); const offset = (y * first.width + x) * 4;
+    rawFingerprint.push(first.data[offset] / 255, first.data[offset + 1] / 255, first.data[offset + 2] / 255, (Math.abs(first.data[offset] - second.data[offset]) + Math.abs(first.data[offset + 1] - second.data[offset + 1]) + Math.abs(first.data[offset + 2] - second.data[offset + 2])) / 765);
+  }
+  const mean = rawFingerprint.reduce((sum, value) => sum + value, 0) / rawFingerprint.length;
+  const deviation = Math.sqrt(rawFingerprint.reduce((sum, value) => sum + (value - mean) ** 2, 0) / rawFingerprint.length) || 1;
+  const fingerprint = rawFingerprint.map((value) => (value - mean) / deviation);
+  return { contrast, coverage, distinctness: 0, fingerprint, grade, motion, vibrancy };
+}
+
+export function scoreVisualDistinctness(grades: Readonly<Record<string, VisualQualityMetrics>>): Record<string, VisualQualityMetrics> {
+  const result: Record<string, VisualQualityMetrics> = {};
+  for (const mode of VISUAL_MODES) {
+    const metric = grades[mode.id]; if (!metric) continue;
+    const peers = VISUAL_MODES.filter((candidate) => candidate.kind === mode.kind && candidate.id !== mode.id && grades[candidate.id]);
+    const nearest = peers.length ? Math.min(...peers.map((peer) => {
+      const other = grades[peer.id].fingerprint; return Math.sqrt(metric.fingerprint.reduce((sum, value, index) => sum + (value - other[index]) ** 2, 0) / metric.fingerprint.length);
+    })) : 1;
+    result[mode.id] = { ...metric, distinctness: Math.round(Math.min(1, nearest / 0.55) * 100) };
+  }
+  return result;
+}
+
+export function visualAuditPasses(grades: Readonly<Record<string, VisualQualityMetrics>>, minimumGrade = 60, minimumDistinctness = 40): boolean {
+  const metrics = Object.values(grades);
+  return metrics.length === VISUAL_MODES.length && metrics.every((metric) => metric.grade >= minimumGrade && metric.distinctness >= minimumDistinctness);
 }

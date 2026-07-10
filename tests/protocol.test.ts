@@ -21,7 +21,8 @@ import {
 } from "../lib/optical-decoder";
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
-import { VISUAL_MODES } from "../lib/visual-modes";
+import { VISUAL_MODES, visualModeVariant } from "../lib/visual-modes";
+import { scoreVisualDistinctness, visualAuditPasses, type VisualQualityMetrics } from "../lib/visual-quality";
 import { derivePairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
@@ -47,6 +48,30 @@ test("visual laboratory exposes exactly fifty documented unique modes", () => {
     assert.ok(mode.robustness.length > 24, `${mode.id} needs a robustness explanation`);
     assert.equal(mode.colors.length, 3);
   }
+  for (const kind of new Set(VISUAL_MODES.map((mode) => mode.kind))) {
+    const family = VISUAL_MODES.filter((mode) => mode.kind === kind);
+    const variants = family.map((mode) => visualModeVariant(mode.id));
+    assert.equal(new Set(variants).size, family.length, `${kind} needs unique structural variants`);
+    assert.equal(new Set(family.map((mode) => mode.algorithm)).size, family.length, `${kind} needs unique algorithm descriptions`);
+    assert.ok(variants.every((variant) => variant > 0 && variant < 1));
+  }
+});
+
+test("visual distinctness scores nearest neighbors within each renderer family", () => {
+  const metric = (fingerprint: number[]): VisualQualityMetrics => ({ contrast: 80, coverage: 80, distinctness: 0, fingerprint, grade: 80, motion: 80, vibrancy: 80 });
+  const duplicate = scoreVisualDistinctness({ galaxy: metric([0, 0, 0]), andromeda: metric([0, 0, 0]) });
+  assert.equal(duplicate.galaxy.distinctness, 0); assert.equal(duplicate.andromeda.distinctness, 0);
+  const separated = scoreVisualDistinctness({ galaxy: metric([-1, -1, -1]), andromeda: metric([1, 1, 1]) });
+  assert.equal(separated.galaxy.distinctness, 100); assert.equal(separated.andromeda.distinctness, 100);
+});
+
+test("visual audit gate requires all fifty modes to clear quality and distinctness floors", () => {
+  const metric = (grade = 60, distinctness = 40): VisualQualityMetrics => ({ contrast: 80, coverage: 80, distinctness, fingerprint: [0], grade, motion: 80, vibrancy: 80 });
+  const passing = Object.fromEntries(VISUAL_MODES.map((mode) => [mode.id, metric()]));
+  assert.equal(visualAuditPasses(passing), true);
+  assert.equal(visualAuditPasses({ ...passing, galaxy: metric(59, 40) }), false);
+  assert.equal(visualAuditPasses({ ...passing, galaxy: metric(60, 39) }), false);
+  assert.equal(visualAuditPasses(Object.fromEntries(Object.entries(passing).slice(1))), false);
 });
 
 test("robust soft evidence rejects a low-quality outlier frame", () => {

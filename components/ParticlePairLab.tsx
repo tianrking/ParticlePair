@@ -28,7 +28,7 @@ import {
   type Language,
 } from "../lib/i18n";
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
-import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
+import { analyzeVisualModeQuality, scoreVisualDistinctness, visualAuditPasses, type VisualQualityMetrics } from "../lib/visual-quality";
 import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow, v2SequenceAtTime } from "../lib/protocol-v2";
 import { derivePairingSas, type PairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
@@ -106,7 +106,7 @@ export function ParticlePairLab() {
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
   const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
-  const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success">("idle");
+  const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [qualityAuditProgress, setQualityAuditProgress] = useState(0);
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
   const [calibrationStatus, setCalibrationStatus] = useState<"idle" | "running" | "success" | "error">("idle");
@@ -358,7 +358,8 @@ export function ParticlePairLab() {
       setVisualGrades({ ...grades }); setQualityAuditProgress(index + 1);
       if (index % 3 === 2) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
-    setQualityAuditStatus("success");
+    const scored = scoreVisualDistinctness(grades);
+    setVisualGrades(scored); setQualityAuditStatus(visualAuditPasses(scored) ? "success" : "error");
   };
 
   const calibrateModulation = async () => {
@@ -608,9 +609,9 @@ export function ParticlePairLab() {
           </div>
           <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
           <div className={`visual-audit ${qualityAuditStatus}`} role="status" aria-live="polite" aria-busy={qualityAuditStatus === "running"}>
-            <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG` : "PIXEL METRICS PENDING"}</strong></div>
+            <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" || qualityAuditStatus === "error" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG · ${Math.min(...Object.values(visualGrades).map((grade) => grade.distinctness))} D` : "PIXEL METRICS PENDING"}</strong></div>
             <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · ${grade.grade}` : ""}`} className={grade ? grade.grade >= 70 ? "excellent" : grade.grade >= 55 ? "good" : "review" : ""} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}`}>{grade?.grade ?? "·"}</button>; })}</div>
-            {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
+            {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>DISTINCT</dt><dd>{visualGrades[visualMode].distinctness}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
           </div>
           <button className="diagnostic-export" type="button" onClick={exportDiagnosticReport}><span>↓</span><div><strong>EXPORT LOCAL DIAGNOSTIC</strong><small>Redacted JSON · no secret · no camera frames</small></div></button>
         </article>

@@ -3,7 +3,7 @@ import {
   isBorderCell,
   PHASE_DURATION_MS,
 } from "./optical-layout";
-import { visualMode, type VisualModeId } from "./visual-modes";
+import { visualMode, visualModeVariant, type VisualModeId } from "./visual-modes";
 import { drawArtisticScene } from "./artistic-scenes";
 
 interface Particle {
@@ -90,6 +90,7 @@ export function renderParticleFrame({
   reduceDecorativeMotion = false,
 }: ParticleFrameOptions): void {
   const selectedMode = visualMode(mode);
+  const structuralVariant = visualModeVariant(mode);
   const phase =
     explicitPhase ?? Math.floor(time / PHASE_DURATION_MS) % 2 === 1;
   const side = Math.min(width, height);
@@ -133,7 +134,7 @@ export function renderParticleFrame({
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
       0.055 +
-      (positive ? strength : -strength) * 0.19 * borderBoost;
+      (positive ? strength : -strength) * 0.3 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -161,24 +162,24 @@ export function renderParticleFrame({
     drawArtisticScene({ context, height, mode: selectedMode, pixelRatio, time: decorativeTime, width });
   }
 
-  const rotation = decorativeTime * 0.000075;
+  const rotation = decorativeTime * (0.000052 + structuralVariant * 0.000052);
   const particleStep = decorativeQuality < 0.6 ? 3 : decorativeQuality < 0.85 ? 2 : 1;
   for (let particleIndex = 0; particleIndex < PARTICLES.length; particleIndex += particleStep) {
     if (selectedMode.kind !== "galaxy") break;
     const particle = PARTICLES[particleIndex];
-    const wave =
-      Math.sin(decorativeTime * 0.00028 + particle.angle * 2.6) *
-      (0.016 + (1 - particle.depth) * 0.018);
-    const radius = (particle.radius + wave) * side * 0.45;
+    const legacyGalaxy = selectedMode.id === "galaxy";
+    const wave = Math.sin(decorativeTime * (legacyGalaxy ? 0.00014 : 0.00021 + structuralVariant * 0.00017) + particle.angle * (legacyGalaxy ? 2.6 : 2.1 + structuralVariant)) * (0.016 + (1 - particle.depth) * 0.018);
+    const radius = legacyGalaxy ? (particle.radius + wave) * side * 0.45 : (Math.pow(particle.radius, 0.78 + structuralVariant * 0.42) + wave) * side * (0.42 + structuralVariant * 0.055);
     const angle =
       particle.angle +
-      rotation * (0.72 + particle.speed * 5.2) +
-      Math.sin(decorativeTime * 0.0002 + particle.radius * 8) * 0.018;
-    const perspective = 0.88 + particle.depth * 0.14;
+      (legacyGalaxy ? 0 : (structuralVariant - 0.5) * particle.radius * 1.7) +
+      (legacyGalaxy ? decorativeTime * 0.00004 : rotation) * (0.72 + particle.speed * 5.2) +
+      Math.sin(decorativeTime * (legacyGalaxy ? 0.0001 : 0.0002) + particle.radius * 8) * 0.018;
+    const perspective = legacyGalaxy ? 0.88 + particle.depth * 0.14 : 0.82 + structuralVariant * 0.12 + particle.depth * 0.14;
     const x = centerX + Math.cos(angle) * radius * perspective;
     const y =
       centerY +
-      Math.sin(angle) * radius * (0.56 + particle.depth * 0.2);
+      Math.sin(angle) * radius * (legacyGalaxy ? 0.56 + particle.depth * 0.2 : 0.46 + structuralVariant * 0.22 + particle.depth * 0.18);
     const shimmer =
       (0.52 + Math.sin(decorativeTime * 0.00082 + particle.angle * 8.5) * 0.17) *
       (0.62 + particle.depth * 0.48);
