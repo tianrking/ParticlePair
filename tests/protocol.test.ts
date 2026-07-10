@@ -33,6 +33,7 @@ import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { cameraConstraintPlan, tuneCameraTrack } from "../lib/camera-tuning";
 import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth } from "../lib/resolution-governor";
 import { EvidenceDiversityGate } from "../lib/evidence-diversity";
+import { analyzePayloadConfidence } from "../lib/payload-confidence";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -273,6 +274,25 @@ test("evidence diversity falls back to cadence spacing and resets cleanly", () =
   assert.deepEqual(gate.observe({ callbackTimeMs: 54, frameIntervalMs: 100, mediaTimeSeconds: 0 }), { accepted: false, reason: "too-close" });
   assert.equal(gate.observe({ callbackTimeMs: 55, frameIntervalMs: 100, mediaTimeSeconds: 0 }).accepted, true);
   gate.reset(); assert.equal(gate.observe({ callbackTimeMs: 1, frameIntervalMs: 100, mediaTimeSeconds: 0 }).accepted, true);
+});
+
+test("payload confidence tolerates sparse weak cells but detects localized occlusion", () => {
+  const sparse = Array<number>(CELL_COUNT).fill(1); let payloadIndex = 0;
+  for (let index = 0; index < CELL_COUNT; index += 1) if (!isBorderCell(index)) { if (payloadIndex % 11 === 0) sparse[index] = 0.1; payloadIndex += 1; }
+  const healthy = analyzePayloadConfidence(sparse);
+  assert.equal(healthy.state, "healthy"); assert.equal(healthy.canDecode, true); assert.ok(healthy.coverage > 0.88);
+
+  const blocked = Array<number>(CELL_COUNT).fill(1);
+  for (let row = 5; row < 9; row += 1) for (let column = 5; column < 9; column += 1) blocked[row * 18 + column] = 0.05;
+  const occluded = analyzePayloadConfidence(blocked);
+  assert.equal(occluded.state, "occluded"); assert.equal(occluded.canDecode, false); assert.equal(occluded.maxWeakWindow, 1);
+});
+
+test("payload confidence labels diffuse low coverage separately from occlusion", () => {
+  const confidence = Array<number>(CELL_COUNT).fill(1); let payloadIndex = 0;
+  for (let index = 0; index < CELL_COUNT; index += 1) if (!isBorderCell(index)) { if (payloadIndex % 3 === 0) confidence[index] = 0.1; payloadIndex += 1; }
+  const summary = analyzePayloadConfidence(confidence);
+  assert.equal(summary.state, "weak"); assert.equal(summary.canDecode, false); assert.ok(summary.coverage > 0.64 && summary.coverage < 0.68);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

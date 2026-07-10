@@ -32,6 +32,7 @@ import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { tuneCameraTrack, type CameraTuningResult } from "../lib/camera-tuning";
 import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth, type CaptureResolutionProfile } from "../lib/resolution-governor";
 import { EvidenceDiversityGate } from "../lib/evidence-diversity";
+import { analyzePayloadConfidence, type PayloadConfidenceSummary } from "../lib/payload-confidence";
 
 interface OpticalScannerProps {
   language: Language;
@@ -45,7 +46,7 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "softfocus" | "timing" | "ambiguous" | "background" | "interrupted" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "softfocus" | "timing" | "ambiguous" | "background" | "interrupted" | "occluded" | "coverage" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
@@ -105,6 +106,10 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return language === "zh" ? "扫描已安全暂停 · 返回前台后将重新同步" : language === "es" ? "Escaneo pausado de forma segura · se resincronizará al volver" : "Scanning safely paused · synchronization restarts when you return";
     case "interrupted":
       return language === "zh" ? "相机连接已中断 · 请重新启动扫描" : language === "es" ? "Conexión de cámara interrumpida · reinicia el escaneo" : "Camera connection interrupted · restart the scanner";
+    case "occluded":
+      return language === "zh" ? "检测到局部遮挡 · 请移开手指并露出完整光学方框" : language === "es" ? "Oclusión localizada · retira los dedos y muestra el cuadro óptico completo" : "Localized occlusion detected · uncover the complete optical square";
+    case "coverage":
+      return language === "zh" ? "载荷覆盖率不足 · 请保持稳定并改善屏幕可见度" : language === "es" ? "Cobertura de carga insuficiente · mantén la estabilidad y mejora la visibilidad" : "Payload coverage is weak · hold steady and improve screen visibility";
     default:
       return copy.align;
   }
@@ -197,6 +202,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const [captureProfile, setCaptureProfile] = useState<CaptureResolutionProfile | null>(null);
   const [quality, setQuality] = useState(0);
   const [evidenceCount, setEvidenceCount] = useState(0);
+  const [payloadConfidence, setPayloadConfidence] = useState<PayloadConfidenceSummary | null>(null);
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
@@ -225,6 +231,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     lastTelemetryRef.current = 0;
     setQuality(0);
     setEvidenceCount(0);
+    setPayloadConfidence(null);
     setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   };
 
@@ -405,6 +412,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         historyRef.current = [];
         evidenceRef.current.clear();
         setEvidenceCount(0);
+        setPayloadConfidence(null);
         setTelemetry({
           candidates: opticalSearchCandidateLabel(decision.tier),
           consensus,
@@ -426,6 +434,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         let recovered: DecodedParticleCode | null = null;
         let accumulatedFrames = 0;
         let v2Rank = 0;
+        let coverageSummary: PayloadConfidenceSummary | null = null;
 
         for (const candidate of ranked) {
           if (
@@ -455,15 +464,20 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           accumulatedFrames = Math.max(accumulatedFrames, bucket.frames.length);
           setEvidenceCount(Math.min(3, accumulatedFrames));
 
+          const combined = bucket.frames.length >= 2 ? combineOpticalEvidence(bucket.frames) : null;
+          const confidence = combined ? analyzePayloadConfidence(combined.confidence) : null;
+          if (confidence && !coverageSummary) { coverageSummary = confidence; setPayloadConfidence(confidence); }
+
           const canAttemptDecode =
             candidate.analysis.quality >= DECODE_QUALITY &&
             bucket.frames.length >= 2 &&
+            confidence?.canDecode === true &&
             consensusRef.current.canDecode(candidate.transform) &&
             timestamp - lastSuccessRef.current > 1200;
           if (!canAttemptDecode) continue;
 
           try {
-            const combined = combineOpticalEvidence(bucket.frames);
+            if (!combined) continue;
             const cells = combined.differences.map((difference) => difference > 0);
             const bits = extractPayloadBits(cells);
             try {
@@ -497,6 +511,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           onDecoded(recovered);
         } else if (v2Rank > 0) {
           setMessage({ kind: "fountain", rank: v2Rank, percent });
+        } else if (coverageSummary?.state === "occluded") {
+          setMessage({ kind: "occluded" });
+        } else if (coverageSummary?.state === "weak") {
+          setMessage({ kind: "coverage" });
         } else if (score >= DECODE_QUALITY && consensus.state === "ambiguous") {
           setMessage({ kind: "ambiguous" });
         } else if (score >= DECODE_QUALITY) {
@@ -511,6 +529,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       } else {
         consensusRef.current.observe([]);
         setEvidenceCount(0);
+        setPayloadConfidence(null);
         const healthState = best?.captureHealth?.state;
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : best?.captureHealth?.focusState === "soft" ? { kind: "softfocus" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
@@ -588,8 +607,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
-        <div className="evidence-meter" aria-label={`${evidenceCount} of 3 independent evidence frames`}>
-          <span>EVIDENCE</span>
+        <div className={`evidence-meter ${payloadConfidence?.state ?? "measuring"}`} aria-label={`${evidenceCount} of 3 independent evidence frames${payloadConfidence ? `, ${Math.round(payloadConfidence.coverage * 100)} percent payload coverage` : ""}`}>
+          <span>EVIDENCE{payloadConfidence ? ` · Q${Math.round(payloadConfidence.coverage * 100)}` : ""}</span>
           {[0, 1, 2].map((index) => <i key={index} className={index < evidenceCount ? "is-active" : undefined} />)}
         </div>
         <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"} focus-${telemetry.health?.focusState ?? "unknown"}`} aria-label="Scanner performance, dynamic range, and focus telemetry">
