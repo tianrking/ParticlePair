@@ -235,6 +235,44 @@ The asymmetric border lets the receiver infer the sign of the differential phase
 
 Every source byte is encoded as one Hamming(12,8) codeword. The implementation can repair one flipped bit per codeword. CRC-16 detects and rejects checksum mismatches after decoding, but it is neither collision-proof nor a cryptographic authenticator.
 
+## Generative optical studio
+
+ParticlePair now separates the reliable optical carrier from the generative art layer. Every visual uses the same calibrated 18×18 complementary phase carrier, so selecting another skin does not require another camera decoder.
+
+- 50 selectable visual modes across Cosmic, Organic, Geometric, Atmospheric, and Synthetic collections.
+- 13 renderer families: spiral fields, curtains, rings, petals, orbits, node graphs, tendrils, clouds, weaves, facets, glyphs, city grids, and embers.
+- Search, category filters, per-mode three-color spectra, automatic showcase, persistent selection, and an immersive transmission stage.
+- Every mode explains its generative algorithm, camera extraction path, and robustness strategy in the interface.
+- The Visual Quality Engine measures vibrancy, contrast, hue coverage, motion continuity, and a composite grade from real rendered pixels. The current 50-mode baseline has no mode below grade 55.
+- The Camera Channel Lab exercises clean, low-light, exposure-drift, defocus, sensor-noise, and partial-occlusion paths. A result counts only after the recovered secret matches and CRC passes.
+- Adaptive modulation searches for the quietest strength that survives both clean and exposure-drift channels, then adds an eight-point safety margin.
+
+Decorative motion never owns protocol bits. Static spectral atmosphere cancels between opposite phases; animated details remain sparse enough for Hamming and multi-frame soft evidence to absorb residual error.
+
+## Particle Code v2: optical fountain stream
+
+V2 retains the exact 21-byte packet and 252-bit optical budget. It divides the 128-bit secret into four 4-byte source blocks. Each transmitted fragment carries one XOR equation selected from 15 systematic and parity masks. The receiver performs Gaussian elimination over GF(2); any four linearly independent equations recover the secret, regardless of order, while duplicate equations do not increase rank.
+
+| Byte range | Meaning |
+|---|---|
+| 0–1 | Magic and protocol version |
+| 2–5 | 32-bit session ID |
+| 6–9 | Issued-at minute |
+| 10–12 | Sequence, four-bit equation mask, block length |
+| 13–16 | Four-byte XOR payload |
+| 17–18 | Block count and secret length |
+| 19–20 | CRC-16/CCITT-FALSE |
+
+Each byte is still protected by Hamming(12,8). Sessions expire after ten minutes and rotate after eight. Completed-session replay, conflicting equations, future fragments, expired fragments, and invalid CRCs are rejected. The decoder keeps at most eight incomplete sessions and 32 completed replay records.
+
+V2 timing profiles are all exact multiples of the 300 ms phase:
+
+- Fast: 600 ms per equation.
+- Balanced: 900 ms per equation and the default profile.
+- Robust: 1200 ms per equation for low frame rates, distance, or difficult light.
+
+The live equation matrix shows active source blocks, XOR mask, sequence position, session TTL, and the rule that four independent equations are required. The Canvas proof runs the complete render → two-phase sample → Hamming → CRC → fountain recovery path.
+
 ## Security model
 
 | Boundary | Current state |

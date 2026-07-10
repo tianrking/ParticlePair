@@ -24,6 +24,16 @@ test("server-renders the ParticlePair product shell", async () => {
   assert.match(html, /Broadcast particle code/);
   assert.match(html, /Camera receiver/);
   assert.match(html, /Recover secret from animation/);
+  assert.match(html, /STABLE FRAME/);
+  assert.match(html, /FOUNTAIN STREAM/);
+  assert.match(html, /V2 CANVAS PROOF/);
+  assert.match(html, /IMMERSIVE TRANSMIT/);
+  assert.match(html, /VALIDATE ALL 50 VISUAL MODES/);
+  assert.match(html, /RUN CAMERA STRESS SUITE/);
+  assert.match(html, /AUDIT ALL 50 VISUALS/);
+  assert.match(html, /AUTO CALIBRATE/);
+  assert.match(html, /Spiral Galaxy/);
+  assert.match(html, /Quantum Foam/);
   assert.match(html, /aria-label="Language"/);
   assert.match(html, /aria-pressed="true"[^>]*>EN</);
   assert.match(html, /aria-pressed="false"[^>]*>ES</);

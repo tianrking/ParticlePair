@@ -235,6 +235,44 @@ El borde asimétrico permite que el receptor deduzca el signo de la fase diferen
 
 Cada byte original se codifica de forma independiente como una palabra Hamming(12,8). La implementación puede reparar un bit invertido por palabra de código. CRC-16 detecta y rechaza discrepancias de suma de comprobación después de la decodificación, pero no garantiza detectar cualquier alteración ni es un autenticador criptográfico.
 
+## Estudio óptico generativo
+
+ParticlePair separa la portadora óptica fiable de la capa artística generativa. Los 50 estilos comparten la misma portadora diferencial calibrada de 18×18, por lo que cambiar el aspecto no exige otro decodificador de cámara.
+
+- 50 modos en cinco colecciones: Cosmic, Organic, Geometric, Atmospheric y Synthetic.
+- 13 familias de renderizado: galaxias, cortinas, anillos, pétalos, órbitas, nodos, tentáculos, nubes, tejidos, facetas, glifos, ciudades y brasas.
+- Búsqueda, filtros, espectro propio por modo, presentación automática, selección persistente y escenario inmersivo.
+- Cada modo explica su algoritmo generativo, extracción de cámara y estrategia de robustez.
+- Visual Quality Engine mide viveza, contraste, cobertura cromática, continuidad de movimiento y nota compuesta sobre píxeles reales. Ninguno de los 50 modos actuales queda por debajo de 55.
+- Camera Channel Lab prueba señal limpia, poca luz, deriva de exposición, desenfoque, ruido de sensor y oclusión parcial. Solo aprueba si el secreto coincide y pasa CRC.
+- La modulación adaptativa busca la intensidad mínima que supera los canales limpio y con deriva, y añade ocho puntos de margen.
+
+La decoración no posee bits del protocolo. La atmósfera espectral estática se cancela entre fases opuestas y los detalles móviles permanecen dispersos para que Hamming y la evidencia temporal absorban el error residual.
+
+## Particle Code v2: flujo fountain óptico
+
+V2 conserva exactamente 21 bytes y 252 bits ópticos. Divide el secreto de 128 bits en cuatro bloques de 4 bytes. Cada fragmento transporta una ecuación XOR elegida entre 15 máscaras sistemáticas y de paridad. El receptor aplica eliminación gaussiana en GF(2): cuatro ecuaciones linealmente independientes recuperan el secreto sin importar el orden; los duplicados no aumentan el rango.
+
+| Bytes | Significado |
+|---|---|
+| 0–1 | Magic y versión |
+| 2–5 | ID de sesión de 32 bits |
+| 6–9 | Minuto de emisión |
+| 10–12 | Secuencia, máscara de cuatro bits y longitud |
+| 13–16 | Carga XOR de cuatro bytes |
+| 17–18 | Número de bloques y longitud del secreto |
+| 19–20 | CRC-16/CCITT-FALSE |
+
+Cada byte conserva Hamming(12,8). Las sesiones caducan a los diez minutos y rotan a los ocho. Se rechazan repeticiones completadas, ecuaciones conflictivas, fragmentos futuros o caducados y CRC inválido. El receptor limita el estado a ocho sesiones incompletas y 32 registros antirrepetición.
+
+Perfiles temporales, todos múltiplos de la fase de 300 ms:
+
+- Fast: 600 ms por ecuación.
+- Balanced: 900 ms por ecuación, perfil predeterminado.
+- Robust: 1200 ms por ecuación para baja tasa de cuadros, distancia o iluminación difícil.
+
+La matriz en vivo muestra bloques activos, máscara XOR, posición, TTL y rango requerido. Canvas Proof recorre renderizado, muestreo bifásico, Hamming, CRC y recuperación fountain.
+
 ## Modelo de seguridad
 
 | Límite | Estado actual |
