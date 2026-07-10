@@ -71,6 +71,7 @@ export interface ParticleFrameOptions {
   time: number;
   width: number;
   mode?: VisualModeId;
+  decorativeQuality?: number;
 }
 
 /** Render one complete optical frame. An explicit phase makes iOS diagnostics deterministic. */
@@ -84,6 +85,7 @@ export function renderParticleFrame({
   time,
   width,
   mode = "galaxy",
+  decorativeQuality = 1,
 }: ParticleFrameOptions): void {
   const selectedMode = visualMode(mode);
   const phase =
@@ -157,7 +159,8 @@ export function renderParticleFrame({
   }
 
   const rotation = time * 0.000075;
-  for (let particleIndex = 0; particleIndex < PARTICLES.length; particleIndex += 1) {
+  const particleStep = decorativeQuality < 0.6 ? 3 : decorativeQuality < 0.85 ? 2 : 1;
+  for (let particleIndex = 0; particleIndex < PARTICLES.length; particleIndex += particleStep) {
     if (selectedMode.kind !== "galaxy") break;
     const particle = PARTICLES[particleIndex];
     const wave =

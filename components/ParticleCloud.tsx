@@ -11,14 +11,16 @@ interface ParticleCloudProps {
   strength: number;
   paused?: boolean;
   mode?: VisualModeId;
+  renderQuality?: "ultra" | "balanced" | "efficient";
 }
 
-export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false, mode = "galaxy" }: ParticleCloudProps) {
+export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false, mode = "galaxy", renderQuality = "ultra" }: ParticleCloudProps) {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
   const strengthRef = useRef(strength);
   const modeRef = useRef(mode);
+  const qualityRef = useRef(renderQuality);
   const frozenTimeRef = useRef(0);
 
   useEffect(() => {
@@ -32,6 +34,8 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  useEffect(() => { qualityRef.current = renderQuality; }, [renderQuality]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -62,6 +66,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         time,
         width,
         mode: modeRef.current,
+        decorativeQuality: qualityRef.current === "ultra" ? 1 : qualityRef.current === "balanced" ? 0.72 : 0.46,
       });
 
       if (!paused) animationFrame = requestAnimationFrame(render);

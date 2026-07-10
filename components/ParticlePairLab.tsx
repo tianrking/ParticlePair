@@ -95,6 +95,7 @@ export function ParticlePairLab() {
   const [autoShowcase, setAutoShowcase] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
+  const [renderQuality, setRenderQuality] = useState<"ultra" | "balanced" | "efficient">("balanced");
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
@@ -125,6 +126,8 @@ export function ParticlePairLab() {
     const initializationFrame = window.requestAnimationFrame(() => {
       setSecretHex(randomSecretHex());
       setV2SessionId(randomSessionId()); setV2IssuedMinute(v2MinuteNow());
+      const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+      setRenderQuality(navigator.hardwareConcurrency <= 4 || deviceMemory <= 4 ? "efficient" : navigator.hardwareConcurrency >= 8 && deviceMemory >= 8 ? "ultra" : "balanced");
       try {
         const savedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
         if (isLanguage(savedLanguage)) {
@@ -455,7 +458,7 @@ export function ParticlePairLab() {
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
           <div className="watch-frame">
-            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} />
+            <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} renderQuality={renderQuality} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
@@ -494,6 +497,7 @@ export function ParticlePairLab() {
             <output>{Math.round(strength * 100)}%</output>
           </div>
           <div className={`adaptive-calibration ${calibrationStatus}`}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
+          <div className="render-budget" aria-label="Decorative render quality"><div><span>RENDER BUDGET</span><strong>Carrier always remains full resolution</strong></div>{(["efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
         </div>
       </section>
 
@@ -595,7 +599,7 @@ export function ParticlePairLab() {
       <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>ORBITACERO · PARTICLEPAIR · 2026</span></footer>
       {immersive ? (
         <section className="immersive-stage" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties} role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
-          <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} />
+          <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} renderQuality={renderQuality} />
           <div className="immersive-glass" aria-hidden="true" />
           <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
           <div className="immersive-meta"><span>{selectedVisualMode.category}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
