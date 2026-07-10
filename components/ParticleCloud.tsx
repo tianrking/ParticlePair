@@ -3,6 +3,7 @@
 import { useEffect, useRef, type RefObject } from "react";
 import { renderParticleFrame } from "../lib/particle-renderer";
 import type { VisualModeId } from "../lib/visual-modes";
+import { decorativeQualityFor, RenderPerformanceGovernor, type RenderPerformanceSnapshot, type RenderQualitySetting } from "../lib/render-performance";
 
 interface ParticleCloudProps {
   ariaLabel: string;
@@ -11,16 +12,20 @@ interface ParticleCloudProps {
   strength: number;
   paused?: boolean;
   mode?: VisualModeId;
-  renderQuality?: "ultra" | "balanced" | "efficient";
+  renderQuality?: RenderQualitySetting;
+  onPerformance?: (snapshot: RenderPerformanceSnapshot) => void;
 }
 
-export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false, mode = "galaxy", renderQuality = "ultra" }: ParticleCloudProps) {
+export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, strength, paused = false, mode = "galaxy", renderQuality = "auto", onPerformance }: ParticleCloudProps) {
   const internalCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
   const strengthRef = useRef(strength);
   const modeRef = useRef(mode);
   const qualityRef = useRef(renderQuality);
+  const performanceCallbackRef = useRef(onPerformance);
+  const governorRef = useRef(new RenderPerformanceGovernor());
+  const lastPerformanceReportRef = useRef(0);
   const reduceMotionRef = useRef(false);
   const frozenTimeRef = useRef(0);
 
@@ -36,7 +41,8 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
     modeRef.current = mode;
   }, [mode]);
 
-  useEffect(() => { qualityRef.current = renderQuality; }, [renderQuality]);
+  useEffect(() => { qualityRef.current = renderQuality; if (renderQuality === "auto") governorRef.current.reset(); }, [renderQuality]);
+  useEffect(() => { performanceCallbackRef.current = onPerformance; }, [onPerformance]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -53,6 +59,9 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
 
     let animationFrame = 0;
     const render = (timestamp: number) => {
+      const measured = governorRef.current.sample(timestamp);
+      const activeProfile = qualityRef.current === "auto" ? measured.profile : qualityRef.current;
+      if (timestamp - lastPerformanceReportRef.current >= 750) { lastPerformanceReportRef.current = timestamp; performanceCallbackRef.current?.({ fps: measured.fps, profile: activeProfile }); }
       const bounds = canvas.getBoundingClientRect();
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
       const width = Math.max(1, Math.round(bounds.width * pixelRatio));
@@ -73,7 +82,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         time,
         width,
         mode: modeRef.current,
-        decorativeQuality: qualityRef.current === "ultra" ? 1 : qualityRef.current === "balanced" ? 0.72 : 0.46,
+        decorativeQuality: decorativeQualityFor(activeProfile),
         reduceDecorativeMotion: reduceMotionRef.current,
       });
 

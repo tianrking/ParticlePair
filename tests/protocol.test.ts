@@ -37,8 +37,30 @@ import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth }
 import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 import { analyzePayloadConfidence } from "../lib/payload-confidence";
 import { deriveVisualDna } from "../lib/visual-dna";
+import { decorativeQualityFor, RenderPerformanceGovernor } from "../lib/render-performance";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("render governor degrades quickly and restores slowly without touching carrier quality", () => {
+  const governor = new RenderPerformanceGovernor(); let timestamp = 0; governor.sample(timestamp);
+  for (let index = 0; index < 24; index += 1) { timestamp += 34; governor.sample(timestamp); }
+  assert.equal(governor.profile, "efficient");
+  governor.reset("efficient"); governor.sample(timestamp);
+  for (let index = 0; index < 119; index += 1) { timestamp += 16; governor.sample(timestamp); }
+  assert.equal(governor.profile, "efficient");
+  timestamp += 16; governor.sample(timestamp); assert.equal(governor.profile, "balanced");
+  governor.reset("balanced"); governor.sample(timestamp);
+  for (let index = 0; index < 149; index += 1) { timestamp += 16; governor.sample(timestamp); }
+  assert.equal(governor.profile, "balanced");
+  timestamp += 16; governor.sample(timestamp); assert.equal(governor.profile, "ultra");
+  assert.deepEqual([decorativeQualityFor("efficient"), decorativeQualityFor("balanced"), decorativeQualityFor("ultra")], [0.46, 0.72, 1]);
+});
+
+test("render governor ignores background-tab cadence gaps", () => {
+  const governor = new RenderPerformanceGovernor(); governor.sample(0);
+  for (let index = 1; index <= 10; index += 1) governor.sample(index * 16);
+  governor.sample(5000); assert.equal(governor.profile, "balanced");
+});
 
 test("visual DNA is deterministic, payload-sensitive, and bounded", () => {
   const frame = layoutBits(encodeParticleCode(SECRET));
