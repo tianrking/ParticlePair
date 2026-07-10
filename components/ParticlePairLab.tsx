@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+/* eslint-disable @next/next/no-img-element -- These are client-generated PNG evidence frames, not network assets. */
+
+import { useMemo, useRef, useState } from "react";
 import { ParticleCloud } from "./ParticleCloud";
 import { OpticalScanner } from "./OpticalScanner";
 import { extractPayloadBits, isBorderCell, layoutBits } from "../lib/optical-layout";
@@ -12,18 +14,26 @@ import {
   hexToBytes,
   type DecodedParticleCode,
 } from "../lib/protocol";
+import {
+  runRenderedPixelLoopback,
+  type RenderedPixelLoopbackResult,
+} from "../lib/rendered-pixel-loopback";
 
 function randomSecretHex(): string {
   return bytesToHex(createRandomSecret());
 }
 
 export function ParticlePairLab() {
+  const particleCanvasRef = useRef<HTMLCanvasElement>(null);
   const [secretHex, setSecretHex] = useState(() => randomSecretHex());
   const [strength, setStrength] = useState(0.72);
   const [paused, setPaused] = useState(false);
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [testDetail, setTestDetail] = useState("尚未运行闭环测试");
+  const [pixelTestStatus, setPixelTestStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [pixelTestDetail, setPixelTestDetail] = useState("尚未读取真实Canvas像素");
+  const [pixelResult, setPixelResult] = useState<RenderedPixelLoopbackResult | null>(null);
 
   const frame = useMemo(() => {
     try {
@@ -36,8 +46,42 @@ export function ParticlePairLab() {
   const regenerate = () => {
     setSecretHex(randomSecretHex());
     setResult(null);
+    setPixelResult(null);
+    setPixelTestStatus("idle");
+    setPixelTestDetail("密钥已更新，等待新的真实像素测试");
     setTestStatus("idle");
     setTestDetail("已生成新的单次配对秘密");
+  };
+
+  const runPixelLoopbackTest = async () => {
+    const canvas = particleCanvasRef.current;
+    if (!canvas || !validSecret) return;
+
+    setPixelTestStatus("running");
+    setPixelTestDetail("正在从动态Canvas捕获相反光学相位…");
+    setPixelResult(null);
+
+    try {
+      const decoded = await runRenderedPixelLoopback(canvas, secretHex);
+      setPixelResult(decoded);
+      setResult({
+        correctedCodewords: decoded.correctedCodewords,
+        secret: hexToBytes(decoded.recoveredSecretHex),
+        secretHex: decoded.recoveredSecretHex,
+      });
+
+      if (!decoded.matchesExpected) {
+        throw new Error("CRC通过，但恢复密钥与当前发送密钥不一致");
+      }
+
+      setPixelTestStatus("success");
+      setPixelTestDetail(
+        `PNG像素解码成功 · 同步质量 ${Math.round(decoded.quality * 100)}% · Hamming纠正 ${decoded.correctedCodewords} 个码字`,
+      );
+    } catch (error) {
+      setPixelTestStatus("error");
+      setPixelTestDetail(error instanceof Error ? error.message : "真实像素解码失败");
+    }
   };
 
   const runLoopbackTest = () => {
@@ -99,7 +143,7 @@ export function ParticlePairLab() {
             </button>
           </div>
           <div className="watch-frame">
-            <ParticleCloud cells={frame} strength={strength} paused={paused} />
+            <ParticleCloud canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} />
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> LIVE OPTICAL SIGNAL</span>
           </div>
@@ -126,6 +170,27 @@ export function ParticlePairLab() {
           <div className={`test-result ${testStatus}`}>
             <span className="status-orb" />
             <div><strong>{testStatus === "success" ? "链路验证成功" : testStatus === "error" ? "链路验证失败" : testStatus === "running" ? "正在解码" : "等待验证"}</strong><p>{testDetail}</p></div>
+          </div>
+          <button className="secondary-button full-width pixel-test-button" type="button" disabled={!validSecret || pixelTestStatus === "running" || paused} onClick={runPixelLoopbackTest}>
+            {pixelTestStatus === "running" ? "正在捕获真实像素…" : "从动态画面恢复密钥"}
+          </button>
+          <div className={`pixel-test-result ${pixelTestStatus}`}>
+            <div className="pixel-test-heading">
+              <span className="status-orb" />
+              <div><strong>{pixelTestStatus === "success" ? "真实像素解码成功" : pixelTestStatus === "error" ? "真实像素解码失败" : pixelTestStatus === "running" ? "正在比较相反相位" : "等待真实像素测试"}</strong><p>{pixelTestDetail}</p></div>
+            </div>
+            {pixelResult ? (
+              <div className="pixel-evidence">
+                <figure><img src={pixelResult.referenceImage} alt="动态粒子画面的参考相位PNG" /><figcaption>PHASE A · PNG</figcaption></figure>
+                <figure><img src={pixelResult.currentImage} alt="动态粒子画面的相反相位PNG" /><figcaption>PHASE B · PNG</figcaption></figure>
+                <figure><img src={pixelResult.differenceImage} alt="两个光学相位的18乘18差分图" /><figcaption>18×18 DIFF</figcaption></figure>
+                <div className="pixel-key-compare">
+                  <span>RECOVERED KEY</span>
+                  <code>{pixelResult.recoveredSecretHex.match(/.{1,8}/g)?.join(" ")}</code>
+                  <strong>{pixelResult.matchesExpected ? "与发送密钥完全一致 ✓" : "与发送密钥不一致"}</strong>
+                </div>
+              </div>
+            ) : null}
           </div>
         </article>
 

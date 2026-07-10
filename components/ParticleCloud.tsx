@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { GRID_SIZE, PHASE_DURATION_MS } from "../lib/optical-layout";
 
 interface ParticleCloudProps {
+  canvasRef?: RefObject<HTMLCanvasElement | null>;
   cells: readonly boolean[];
   strength: number;
   paused?: boolean;
@@ -28,8 +29,9 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-export function ParticleCloud({ cells, strength, paused = false }: ParticleCloudProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+export function ParticleCloud({ canvasRef: externalCanvasRef, cells, strength, paused = false }: ParticleCloudProps) {
+  const internalCanvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = externalCanvasRef ?? internalCanvasRef;
   const cellsRef = useRef(cells);
   const strengthRef = useRef(strength);
   const pausedRef = useRef(paused);
@@ -138,7 +140,7 @@ export function ParticleCloud({ cells, strength, paused = false }: ParticleCloud
 
     animationFrame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrame);
-  }, [particles]);
+  }, [canvasRef, particles]);
 
   return <canvas ref={canvasRef} className="particle-canvas" aria-label="正在广播的粒子配对码" />;
 }

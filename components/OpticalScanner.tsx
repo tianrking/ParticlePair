@@ -5,17 +5,12 @@ import {
   CELL_COUNT,
   extractPayloadBits,
   GRID_SIZE,
-  syncCorrelation,
 } from "../lib/optical-layout";
+import { analyzeDifferentialFrames } from "../lib/optical-decoder";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 
 interface OpticalScannerProps {
   onDecoded: (result: DecodedParticleCode) => void;
-}
-
-function median(values: readonly number[]): number {
-  const ordered = [...values].sort((left, right) => left - right);
-  return ordered[Math.floor(ordered.length / 2)] ?? 0;
 }
 
 export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
@@ -74,19 +69,13 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
 
     if (history.length >= 8) {
       const reference = history[0];
-      const rawDifferences = values.map((value, index) => value - reference[index]);
-      const exposureShift = median(rawDifferences);
-      const differences = rawDifferences.map((value) => value - exposureShift);
-      const correlation = syncCorrelation(differences);
-      const score = Math.abs(correlation);
+      const analysis = analyzeDifferentialFrames(values, reference);
+      const score = analysis.quality;
       setQuality(Math.round(score * 100));
 
       if (score > 0.52 && timestamp - lastSuccessRef.current > 1200) {
-        const orientation = correlation >= 0 ? 1 : -1;
-        const cells = differences.map((difference) => difference * orientation > 0);
-
         try {
-          const result = decodeParticleCode(extractPayloadBits(cells));
+          const result = decodeParticleCode(extractPayloadBits(analysis.cells));
           lastSuccessRef.current = timestamp;
           setMessage(`识别成功 · 修正 ${result.correctedCodewords} 个码字`);
           onDecoded(result);
