@@ -29,6 +29,7 @@ import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } 
 import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
 import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/candidate-consensus";
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
+import { tuneCameraTrack, type CameraTuningResult } from "../lib/camera-tuning";
 
 interface OpticalScannerProps {
   language: Language;
@@ -55,6 +56,7 @@ const PERSPECTIVE_PATCH_SIZE = 36;
 const INITIAL_TIMING: FrameTimingSnapshot = { fps: 0, frameIntervalMs: 0, jitterMs: 0, pairToleranceMs: 120, state: "measuring" };
 const INITIAL_LOAD: ScanLoadSnapshot = { processingMs: 0, state: "normal", utilization: 0 };
 const INITIAL_CONSENSUS: CandidateConsensusSnapshot = { confidence: 0, dominantTransform: null, geometryStability: 0, margin: 0, state: "measuring" };
+const INITIAL_TUNING: CameraTuningResult = { applied: [], attempted: [], failed: [], status: "native" };
 
 function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
@@ -186,6 +188,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const lifecycleRef = useRef(new CameraLifecycle());
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
+  const [cameraTuning, setCameraTuning] = useState<CameraTuningResult>(INITIAL_TUNING);
   const [quality, setQuality] = useState(0);
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
@@ -226,6 +229,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     runningRef.current = false;
+    setCameraTuning(INITIAL_TUNING);
     resetScannerEvidence();
     setRunning(false);
     setMessage({ kind: "stopped" });
@@ -254,6 +258,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     detachTrackHandlers();
     streamRef.current = null;
     runningRef.current = false;
+    setCameraTuning(INITIAL_TUNING);
     resetScannerEvidence();
     setRunning(false);
     setMessage({ kind: "interrupted" });
@@ -507,11 +512,12 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         return;
       }
       video.srcObject = stream;
+      const track = stream.getVideoTracks()[0];
+      setCameraTuning(track ? await tuneCameraTrack(track) : INITIAL_TUNING);
       await video.play();
       resetScannerEvidence();
       runningRef.current = true;
       lifecycleRef.current.transition("start");
-      const track = stream.getVideoTracks()[0];
       if (track) { track.onended = handleTrackEnded; track.onmute = () => suspend("interrupted"); track.onunmute = resume; }
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -521,6 +527,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       runningRef.current = false;
+      setCameraTuning(INITIAL_TUNING);
       lifecycleRef.current.transition("stop");
       resetScannerEvidence();
       setRunning(false);
@@ -544,7 +551,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span>{telemetry.tier.toUpperCase()}</span>
           <span>GEO {telemetry.candidates}</span>
           <span>{telemetry.timing.fps ? `${telemetry.load.processingMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
-          <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
+          <span className={cameraTuning.applied.includes("focus") ? "camera-tuned" : undefined} title={cameraTuning.applied.length ? `Camera enhancements: ${cameraTuning.applied.join(", ")}` : "Native camera automation"}>{cameraTuning.applied.includes("focus") ? "AF·" : ""}AE×{telemetry.exposureGain.toFixed(2)}</span>
           <span className="health-pill">{telemetry.health ? `DR${Math.round(telemetry.health.score * 100)} · F${Math.round(telemetry.health.focusScore * 100)}` : "DR— · F—"}</span>
           <span className={`consensus-pill ${telemetry.consensus.state}`}>C{telemetry.consensus.state === "measuring" ? "—" : Math.round(telemetry.consensus.confidence * 100)}</span>
           <span className={`timing-pill ${telemetry.timing.state} ${telemetry.load.state}`}>{telemetry.timing.state === "measuring" ? "J— · L—" : `J${Math.round(telemetry.timing.jitterMs)} · L${Math.round(telemetry.load.utilization * 100)}`}</span>

@@ -30,6 +30,7 @@ import { FrameTimingEstimator, selectPhaseReference } from "../lib/frame-timing"
 import { ScanLoadController } from "../lib/scan-load";
 import { CandidateConsensus } from "../lib/candidate-consensus";
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
+import { cameraConstraintPlan, tuneCameraTrack } from "../lib/camera-tuning";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -213,6 +214,29 @@ test("camera resume guard rejects hidden, muted, or ended tracks", () => {
   assert.equal(canResumeCameraTrack("hidden", "live", false), false);
   assert.equal(canResumeCameraTrack("visible", "live", true), false);
   assert.equal(canResumeCameraTrack("visible", "ended", false), false);
+});
+
+test("camera tuning plans only capabilities that explicitly support continuous mode", () => {
+  const plan = cameraConstraintPlan({ focusMode: ["manual", "continuous"], exposureMode: ["single-shot"], whiteBalanceMode: ["continuous"] });
+  assert.deepEqual(plan.map((step) => step.feature), ["focus", "white-balance"]);
+  assert.deepEqual(cameraConstraintPlan({}), []);
+});
+
+test("camera tuning isolates failed enhancements and preserves successful ones", async () => {
+  const calls: unknown[] = [];
+  const result = await tuneCameraTrack({
+    getCapabilities: () => ({ focusMode: ["continuous"], exposureMode: ["continuous"], whiteBalanceMode: ["continuous"] }) as MediaTrackCapabilities,
+    applyConstraints: async (constraints) => { calls.push(constraints); if (JSON.stringify(constraints).includes("exposureMode")) throw new Error("unsupported by driver"); },
+  });
+  assert.equal(calls.length, 3); assert.equal(result.status, "partial");
+  assert.deepEqual(result.applied, ["focus", "white-balance"]); assert.deepEqual(result.failed, ["exposure"]);
+});
+
+test("camera tuning fails open when capability discovery is absent or throws", async () => {
+  let calls = 0;
+  const native = await tuneCameraTrack({ applyConstraints: async () => { calls += 1; } });
+  const guarded = await tuneCameraTrack({ getCapabilities: () => { throw new Error("driver"); }, applyConstraints: async () => { calls += 1; } });
+  assert.equal(native.status, "native"); assert.equal(guarded.status, "native"); assert.equal(calls, 0);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

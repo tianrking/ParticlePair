@@ -218,6 +218,8 @@ Candidate release also requires cross-frame orientation consensus. The receiver 
 
 Camera lifetime is an explicit state machine: idle, running, suspended, or ended. Hiding the page or receiving a temporary track mute safely suspends callbacks and clears phase history, soft evidence, orientation votes, timing/load models, and partial Fountain sessions. Resume is legal only when the page is visible and the same track is still live and unmuted; it always starts with fresh synchronization. An `ended` track is never reused and the UI asks for an explicit scanner restart. Failed startup also stops every acquired track instead of leaking camera access.
 
+Camera tuning is capability-driven progressive enhancement, never a hardware requirement. If `getCapabilities()` explicitly advertises continuous focus, exposure, or white balance, each mode is applied in a separate guarded `applyConstraints()` call. One rejected driver feature cannot roll back the others; absent, incomplete, or throwing capability APIs result in zero tuning calls and native browser automation. `AF·AE` appears only when continuous autofocus was actually accepted.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

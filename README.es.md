@@ -218,6 +218,8 @@ La liberación también exige consenso temporal de orientación. El receptor man
 
 La cámara usa una máquina de estados explícita: inactiva, activa, suspendida o finalizada. Ocultar la página o recibir un mute temporal suspende los callbacks y borra historial de fase, evidencia suave, votos de orientación, modelos temporales/de carga y sesiones Fountain parciales. Solo se reanuda si la página está visible y la misma pista sigue live y sin mute, siempre con sincronización nueva. Una pista ended nunca se reutiliza y la interfaz solicita reiniciar el escáner; un fallo de inicio también detiene todas las pistas adquiridas.
 
+El ajuste de cámara es una mejora progresiva guiada por capacidades, nunca un requisito de hardware. Solo si `getCapabilities()` anuncia enfoque, exposición o balance de blancos continuos se aplica cada modo mediante una llamada `applyConstraints()` aislada. El rechazo de una función no revierte las demás; una API ausente, incompleta o con error produce cero llamadas de ajuste y conserva la automatización nativa. `AF·AE` aparece únicamente cuando el enfoque continuo fue aceptado realmente.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1
