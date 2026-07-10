@@ -38,8 +38,22 @@ import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 import { analyzePayloadConfidence } from "../lib/payload-confidence";
 import { deriveVisualDna } from "../lib/visual-dna";
 import { decorativeQualityFor, RenderPerformanceGovernor } from "../lib/render-performance";
+import { confidenceAurora } from "../lib/confidence-aurora";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("confidence aurora exposes the weakest independent scanner layer", () => {
+  const snapshot = confidenceAurora({ captureHealth: 0.9, captureState: "healthy", complete: false, consensus: 0.88, consensusState: "stable", evidenceCount: 2, focus: 0.9, payloadCoverage: 0.42, running: true, sync: 81, timingState: "stable" });
+  assert.equal(snapshot.bottleneck, "payload"); assert.equal(snapshot.state, "collecting"); assert.ok(snapshot.score > 60);
+  const degraded = confidenceAurora({ captureHealth: 0.92, captureState: "healthy", complete: false, consensus: 0.8, consensusState: "ambiguous", evidenceCount: 2, focus: 0.9, payloadCoverage: 0.8, running: true, sync: 80, timingState: "stable" });
+  assert.equal(degraded.state, "degraded"); assert.equal(degraded.bottleneck, "geometry");
+});
+
+test("confidence aurora distinguishes idle and integrity-complete states", () => {
+  const base = { captureHealth: null, captureState: null, consensus: 0, consensusState: "measuring" as const, evidenceCount: 0, focus: null, payloadCoverage: null, sync: 0, timingState: "measuring" as const };
+  assert.deepEqual(confidenceAurora({ ...base, complete: false, running: false }), { bottleneck: "none", metrics: { capture: 0, sync: 0, geometry: 0, evidence: 0, payload: 0 }, score: 0, state: "idle" });
+  const complete = confidenceAurora({ ...base, complete: true, running: true }); assert.equal(complete.state, "ready"); assert.equal(complete.score, 100); assert.equal(complete.bottleneck, "none");
+});
 
 test("render governor degrades quickly and restores slowly without touching carrier quality", () => {
   const governor = new RenderPerformanceGovernor(); let timestamp = 0; governor.sample(timestamp);

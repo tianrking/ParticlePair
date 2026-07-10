@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   extractPayloadBits,
   GRID_SIZE,
@@ -34,6 +34,7 @@ import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth, 
 import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 import { analyzePayloadConfidence, type PayloadConfidenceSummary } from "../lib/payload-confidence";
 import { observedQuadrantForTransform, type OpticalQuadrant } from "../lib/optical-decoder";
+import { confidenceAurora } from "../lib/confidence-aurora";
 
 interface OpticalScannerProps {
   language: Language;
@@ -210,6 +211,19 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
+  const aurora = useMemo(() => confidenceAurora({
+    captureHealth: telemetry.health?.score ?? null,
+    captureState: telemetry.health?.state ?? null,
+    complete: message.kind === "success",
+    consensus: telemetry.consensus.confidence,
+    consensusState: telemetry.consensus.state,
+    evidenceCount,
+    focus: telemetry.health?.focusScore ?? null,
+    payloadCoverage: payloadConfidence?.coverage ?? null,
+    running,
+    sync: quality,
+    timingState: telemetry.timing.state,
+  }), [evidenceCount, message.kind, payloadConfidence?.coverage, quality, running, telemetry]);
 
   const cancelScheduledFrame = () => {
     const video = videoRef.current;
@@ -644,6 +658,14 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span style={{ width: `${quality}%` }} />
         </div>
       </div>
+      <section className={`confidence-aurora state-${aurora.state}`} aria-label={`Optical confidence ${aurora.score} percent, ${aurora.state}, limiting signal ${aurora.bottleneck}`}>
+        <div className="confidence-aurora-heading"><span>OPTICAL CONFIDENCE AURORA</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div>
+        <div className="aurora-field" aria-hidden="true">
+          {Object.entries(aurora.metrics).map(([metric, value], index) => <i key={metric} style={{ "--aurora-value": value, "--aurora-index": index } as CSSProperties} />)}
+        </div>
+        <div className="aurora-metrics">{Object.entries(aurora.metrics).map(([metric, value]) => <span key={metric} className={aurora.bottleneck === metric ? "is-limiting" : undefined}><b>{metric}</b><em>{Math.round(value * 100)}</em></span>)}</div>
+        <p>{aurora.state === "idle" ? "Camera evidence appears here" : aurora.state === "ready" ? "Independent evidence converged · integrity path ready" : `Limiting layer: ${aurora.bottleneck} · improve this signal to advance`}</p>
+      </section>
       <p className="scanner-message" role="status" aria-live="polite">{scannerMessageText(message, copy, language)}</p>
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
         {running ? copy.stop : copy.start}
