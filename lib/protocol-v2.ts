@@ -29,6 +29,8 @@ export interface V2DecodeProgress {
 }
 
 export function v2MaskForSequence(sequence: number): number { return MASK_SCHEDULE[sequence % MASK_SCHEDULE.length]; }
+export function v2SequenceAtTime(timeMs: number, dwellMs: 600 | 900 | 1200): number { return Math.floor(timeMs / dwellMs) % MASK_SCHEDULE.length; }
+export function v2PairUsesSameFragment(timeMs: number, dwellMs: 600 | 900 | 1200): boolean { return v2SequenceAtTime(timeMs, dwellMs) === v2SequenceAtTime(timeMs - 300, dwellMs); }
 
 function writeUint32(packet: Uint8Array, offset: number, value: number): void {
   packet[offset] = value >>> 24; packet[offset + 1] = value >>> 16; packet[offset + 2] = value >>> 8; packet[offset + 3] = value;

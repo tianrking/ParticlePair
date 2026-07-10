@@ -21,7 +21,7 @@ import {
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES } from "../lib/visual-modes";
-import { decodeV2Fragment, encodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
+import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -68,6 +68,13 @@ test("v2 bounds concurrent sessions and rejects conflicting equations", () => {
   const fragment = decodeV2Fragment(encodeV2Fragment(SECRET, 99, minute, 0), minute);
   decoder.add(fragment, minute); fragment.payload[0] ^= 0xff;
   assert.throws(() => decoder.add(fragment, minute));
+});
+
+test("v2 dwell profiles align every usable pair to one fragment", () => {
+  for (const dwell of [600, 900, 1200] as const) {
+    for (let offset = 300; offset < dwell; offset += 30) assert.equal(v2PairUsesSameFragment(dwell * 3 + offset, dwell), true);
+    assert.equal(v2PairUsesSameFragment(dwell * 3, dwell), false);
+  }
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

@@ -29,7 +29,7 @@ import {
 } from "../lib/i18n";
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
 import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
-import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow } from "../lib/protocol-v2";
+import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow, v2SequenceAtTime } from "../lib/protocol-v2";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -108,6 +108,7 @@ export function ParticlePairLab() {
   const [v2SessionId, setV2SessionId] = useState(0);
   const [v2IssuedMinute, setV2IssuedMinute] = useState(0);
   const [v2Sequence, setV2Sequence] = useState(0);
+  const [v2Dwell, setV2Dwell] = useState<600 | 900 | 1200>(900);
   const [v2Test, setV2Test] = useState<{ status: "idle" | "running" | "success" | "error"; detail: string }>({ status: "idle", detail: "Rendered fountain path not tested" });
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
@@ -151,10 +152,10 @@ export function ParticlePairLab() {
 
   useEffect(() => {
     if (protocolMode !== 2 || paused) return;
-    const updateSequence = () => setV2Sequence(Math.floor(performance.now() / 600) % 15);
+    const updateSequence = () => setV2Sequence(v2SequenceAtTime(performance.now(), v2Dwell));
     updateSequence(); const interval = window.setInterval(updateSequence, 60);
     return () => window.clearInterval(interval);
-  }, [paused, protocolMode]);
+  }, [paused, protocolMode, v2Dwell]);
 
   useEffect(() => {
     if (protocolMode !== 2) return;
@@ -446,6 +447,7 @@ export function ParticlePairLab() {
             <div className="fountain-heading"><span>LIVE EQUATION MATRIX</span><strong>{v2ActiveBlocks.map((active, index) => active ? `B${index}` : "").filter(Boolean).join(" ⊕ ")} → P</strong><i>TTL {Math.max(0, 10 - (v2MinuteNow() - v2IssuedMinute))} MIN</i></div>
             <div className="source-blocks">{v2ActiveBlocks.map((active, index) => <div key={index} className={active ? "is-active" : ""}><span>B{index}</span><i>{secretHex.slice(index * 8, index * 8 + 8) || "00000000"}</i></div>)}<b>⊕</b><div className="parity-block"><span>P</span><i>MASK {v2Mask.toString(2).padStart(4, "0")}</i></div></div>
             <div className="equation-schedule" aria-label="Fountain equation schedule">{Array.from({ length: 15 }, (_, index) => <span key={index} className={index === v2Sequence ? "is-current" : index < v2Sequence ? "is-past" : ""}>{v2MaskForSequence(index).toString(16).toUpperCase()}</span>)}</div>
+            <div className="dwell-selector" aria-label="Fountain fragment timing">{([{ value: 600, label: "FAST", detail: "600 ms" }, { value: 900, label: "BALANCED", detail: "900 ms" }, { value: 1200, label: "ROBUST", detail: "1200 ms" }] as const).map((option) => <button type="button" key={option.value} aria-pressed={v2Dwell === option.value} className={v2Dwell === option.value ? "is-active" : ""} onClick={() => setV2Dwell(option.value)}><strong>{option.label}</strong><small>{option.detail}</small></button>)}</div>
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
           <div className="watch-frame">
