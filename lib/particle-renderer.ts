@@ -113,9 +113,8 @@ export function renderParticleFrame({
     );
   }
 
-  // Keep the original drifting/rotating character, but make the decorative
-  // layer slower and dimmer than the optical carrier so 300 ms camera
-  // differences remain dominated by the encoded cell glows.
+  // A slow orbital drift keeps the cloud graceful; color density comes from
+  // deeper chroma rather than near-white luminance that would mask the code.
   const rotation = time * 0.000055;
   for (const particle of PARTICLES) {
     const wave = Math.sin(time * 0.00035 + particle.angle * 3.1) * 0.045;
@@ -127,10 +126,10 @@ export function renderParticleFrame({
       centerY +
       Math.sin(angle) * radius * (0.72 + particle.depth * 0.24);
     const shimmer =
-      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.27;
+      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.36;
 
     context.beginPath();
-    context.fillStyle = `hsla(${particle.hue}, 98%, ${72 + particle.depth * 8}%, ${shimmer})`;
+    context.fillStyle = `hsla(${particle.hue}, 100%, ${56 + particle.depth * 14}%, ${shimmer})`;
     context.arc(
       x,
       y,
