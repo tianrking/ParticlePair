@@ -28,12 +28,16 @@ function bilinearChannel(data: Uint8ClampedArray, width: number, height: number,
   return (at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy;
 }
 
-export function samplePerspectiveGrid(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number, channel = 1): number[] {
+export function samplePerspectiveGrid(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number): number[] {
   if (data.length !== width * height * 4) throw new Error("RGBA buffer dimensions do not match");
   return Array.from({ length: gridSize * gridSize }, (_, index) => {
     const row = Math.floor(index / gridSize); const column = index % gridSize;
     const point = projectUnitPoint(quad, (column + 0.5) / gridSize, (row + 0.5) / gridSize);
-    return bilinearChannel(data, width, height, point.x, point.y, channel);
+    return opticalPixelValue(
+      bilinearChannel(data, width, height, point.x, point.y, 0),
+      bilinearChannel(data, width, height, point.x, point.y, 1),
+      bilinearChannel(data, width, height, point.x, point.y, 2),
+    );
   });
 }
 
@@ -54,3 +58,4 @@ export function perspectiveCandidatesForCrop(cropKey: string, size: number, tier
   if (tier === "track") return cropKey.endsWith(":0:0") ? candidates : candidates.slice(0, 1);
   return cropKey.endsWith(":0:0") || cropKey.startsWith("1:") ? candidates : candidates.slice(0, 1);
 }
+import { opticalPixelValue } from "./optical-color";

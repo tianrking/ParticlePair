@@ -204,6 +204,8 @@ Deployment is still governed by the repository license and does **not** grant co
 
 The receiver starts with 61 crop/perspective geometries. A hysteresis controller contracts the search to 45 geometries after five stable observations and to 25 after a sustained decode-quality lock. A quality drop expands the search within one or two observations. Every tier change invalidates incompatible frame history; the camera overlay exposes the active tier, geometry count, and local sampling time without including payload data.
 
+Camera RGB is projected into an amplitude-preserving cyan opponent channel, `G - 0.42R - 0.16B`, so vivid blue, violet, and magenta artwork is rejected without normalizing away the optical pulse. For each opposite-phase pair, the known border estimates multiplicative auto-exposure gain from the bright/dim group separation; the decoder then removes that gain and the additive black-level shift before synchronization, Hamming correction, and CRC validation. The live `AE ×` value makes this compensation observable.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

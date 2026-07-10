@@ -157,7 +157,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [telemetry, setTelemetry] = useState({ candidates: 61, durationMs: 0, tier: "acquire" as OpticalSearchTier });
+  const [telemetry, setTelemetry] = useState({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" as OpticalSearchTier });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -183,7 +183,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     evidenceRef.current.clear();
     v2DecoderRef.current = new V2FountainDecoder();
     adaptiveSearchRef.current.reset();
-    setTelemetry({ candidates: 61, durationMs: 0, tier: "acquire" });
+    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -244,11 +244,6 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     };
     const sampleDurationMs = sampled.durationMs;
 
-    if (timestamp - lastTelemetryRef.current >= 250) {
-      lastTelemetryRef.current = timestamp;
-      setTelemetry({ candidates: current.candidates.length, durationMs: sampleDurationMs, tier });
-    }
-
     const history = historyRef.current;
     const reference = history
       .filter((frame) => {
@@ -276,6 +271,16 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       const percent = Math.round(score * 100);
       setQuality(percent);
 
+      if (timestamp - lastTelemetryRef.current >= 250) {
+        lastTelemetryRef.current = timestamp;
+        setTelemetry({
+          candidates: current.candidates.length,
+          durationMs: sampleDurationMs,
+          exposureGain: best?.analysis.exposureGain ?? 1,
+          tier,
+        });
+      }
+
       const decision = adaptiveSearchRef.current.observe({
         bestKey: best?.key,
         quality: score,
@@ -287,6 +292,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         setTelemetry({
           candidates: opticalSearchCandidateLabel(decision.tier),
           durationMs: sampleDurationMs,
+          exposureGain: best?.analysis.exposureGain ?? 1,
           tier: decision.tier,
         });
       }
@@ -417,7 +423,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       v2DecoderRef.current = new V2FountainDecoder();
       adaptiveSearchRef.current.reset();
       lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, durationMs: 0, tier: "acquire" });
+      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -443,6 +449,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span>{telemetry.tier.toUpperCase()}</span>
           <span>{telemetry.candidates} GEOMETRIES</span>
           <span>{telemetry.durationMs.toFixed(1)} MS</span>
+          <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
+          <span>CYAN Δ</span>
         </div>
         <div
           className="scan-quality"

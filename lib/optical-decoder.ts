@@ -10,6 +10,7 @@ import { decodeParticleCode, type DecodedParticleCode } from "./protocol";
 export interface DifferentialFrameAnalysis {
   cells: boolean[];
   differences: number[];
+  exposureGain: number;
   exposureShift: number;
   orientation: 1 | -1;
   rawSyncCorrelation: number;
@@ -97,13 +98,35 @@ export function analyzeDifferentialFrames(
     throw new Error(`Optical samples must contain exactly ${CELL_COUNT} cells`);
   }
 
+  const exposureGain = estimateExposureGain(current, reference);
   return analyzeDifferentialDifferences(
-    current.map((value, index) => value - reference[index]),
+    current.map((value, index) => value - exposureGain * reference[index]),
+    exposureGain,
   );
+}
+
+/** Fit camera auto-exposure gain on the known bipolar border without payload data. */
+function estimateExposureGain(current: readonly number[], reference: readonly number[]): number {
+  const samples = current
+    .map((value, index) => ({ current: value, reference: reference[index], index }))
+    .filter(({ index }) => isBorderCell(index));
+  const groupMean = (source: "current" | "reference", sign: boolean) => {
+    const group = samples.filter((sample) => synchronizationBit(sample.index) === sign);
+    return group.reduce((sum, sample) => sum + sample[source], 0) / group.length;
+  };
+  // The alternating border has equal bright/dim populations. Their separation
+  // is invariant to additive black-level shifts, so the ratio estimates only
+  // multiplicative exposure/white-balance gain.
+  const currentSeparation = Math.abs(groupMean("current", true) - groupMean("current", false));
+  const referenceSeparation = Math.abs(groupMean("reference", true) - groupMean("reference", false));
+  if (referenceSeparation < 1e-6) return 1;
+  const gain = currentSeparation / referenceSeparation;
+  return Math.min(2.5, Math.max(0.35, gain));
 }
 
 export function analyzeDifferentialDifferences(
   rawDifferences: readonly number[],
+  exposureGain = 1,
 ): DifferentialFrameAnalysis {
   if (rawDifferences.length !== CELL_COUNT) {
     throw new Error(`Optical differences must contain exactly ${CELL_COUNT} cells`);
@@ -160,6 +183,7 @@ export function analyzeDifferentialDifferences(
   return {
     cells,
     differences,
+    exposureGain,
     exposureShift,
     orientation,
     rawSyncCorrelation,

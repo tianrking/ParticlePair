@@ -204,6 +204,8 @@ El despliegue sigue sujeto a la licencia del repositorio y **no** concede permis
 
 El receptor comienza con 61 geometrías de recorte y perspectiva. Un controlador con histéresis reduce la búsqueda a 45 geometrías tras cinco observaciones estables y a 25 después de mantener calidad de decodificación. Una caída de calidad amplía la búsqueda en una o dos observaciones. Cada cambio de nivel invalida el historial incompatible; la interfaz solo muestra el nivel, el número de geometrías y el tiempo de muestreo local, nunca el contenido transmitido.
 
+El RGB de la cámara se proyecta en un canal oponente cian que conserva amplitud, `G - 0.42R - 0.16B`, para rechazar el arte azul, violeta y magenta sin eliminar el pulso óptico. En cada par de fases, la separación claro/oscuro del borde conocido estima la ganancia multiplicativa de exposición automática; después se eliminan esa ganancia y el desplazamiento aditivo de negro antes de sincronizar, corregir con Hamming y validar el CRC. El valor `AE ×` hace visible la compensación en tiempo real.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1

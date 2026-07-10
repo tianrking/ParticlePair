@@ -174,18 +174,29 @@ test("particle protocol survives a clean optical layout round trip", () => {
   assert.equal(decoded.correctedCodewords, 0);
 });
 
-test("differential pixel decoding removes exposure drift and restores the secret", () => {
+test("differential pixel decoding removes multiplicative exposure drift and restores the secret", () => {
   const cells = layoutBits(encodeParticleCode(SECRET));
   const reference = cells.map((cell, index) =>
     (cell ? 32 : 104) * (0.72 + (index % 11) * 0.018),
   );
   const current = cells.map((cell, index) =>
-    (cell ? 104 : 32) * (0.72 + (index % 11) * 0.018) + 13,
+    (cell ? 104 : 32) * (0.72 + (index % 11) * 0.018) * 1.65 + 13,
   );
 
   const { analysis, decoded } = decodeDifferentialFrames(current, reference);
   assert.deepEqual(decoded.secret, SECRET);
   assert.ok(analysis.quality > 0.9);
+  assert.ok(Math.abs(analysis.exposureGain - 1.65) < 0.08);
+});
+
+test("cyan opponent projection rejects white-balance contamination without erasing amplitude", () => {
+  const dimCarrier = opticalPixelValue(18, 68, 58);
+  const brightCarrier = opticalPixelValue(42, 210, 178);
+  const blueNebula = opticalPixelValue(70, 26, 240);
+  const magentaNebula = opticalPixelValue(230, 22, 190);
+  assert.ok(brightCarrier - dimCarrier > 100);
+  assert.ok(brightCarrier > blueNebula * 4);
+  assert.ok(brightCarrier > magentaNebula * 4);
 });
 
 test("chance-level border matches are removed from scanner confidence", () => {
@@ -230,7 +241,7 @@ test("sync search recovers rotated and mirrored optical frames", () => {
 test("camera candidate ranking decodes transformed opposite-phase samples", () => {
   const cells = layoutBits(encodeParticleCode(SECRET));
   const reference = cells.map((cell) => (cell ? 28 : 112));
-  const current = cells.map((cell) => (cell ? 121 : 37));
+  const current = cells.map((cell) => (cell ? 121 : 37) * 1.7 + 9);
 
   for (const appliedTransform of OPTICAL_TRANSFORMS) {
     const ranked = rankOpticalFrameAnalyses(
@@ -259,6 +270,7 @@ test("camera candidate ranking decodes transformed opposite-phase samples", () =
     );
     assert.deepEqual(decoded.secret, SECRET);
     assert.ok(ranked[0].analysis.quality > 0.9);
+    assert.ok(Math.abs(ranked[0].analysis.exposureGain - 1.7) < 0.02);
   }
 });
 

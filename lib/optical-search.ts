@@ -1,5 +1,5 @@
 import {
-  analyzeDifferentialDifferences,
+  analyzeDifferentialFrames,
   OPTICAL_TRANSFORMS,
   transformOpticalSamples,
   type DifferentialFrameAnalysis,
@@ -37,16 +37,10 @@ export function rankOpticalFrameAnalyses(
       continue;
     }
 
-    const rawDifferences = currentCandidate.values.map(
-      (value, cellIndex) => value - referenceCandidate.values[cellIndex],
-    );
-
     for (const transform of OPTICAL_TRANSFORMS) {
-      const canonicalDifferences = transformOpticalSamples(
-        rawDifferences,
-        transform,
-      );
-      const analysis = analyzeDifferentialDifferences(canonicalDifferences);
+      const canonicalCurrent = transformOpticalSamples(currentCandidate.values, transform);
+      const canonicalReference = transformOpticalSamples(referenceCandidate.values, transform);
+      const analysis = analyzeDifferentialFrames(canonicalCurrent, canonicalReference);
       matches.push({ analysis, key: currentCandidate.key, transform });
     }
   }
