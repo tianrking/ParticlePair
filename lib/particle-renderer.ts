@@ -31,7 +31,9 @@ const PARTICLES: readonly Particle[] = (() => {
     depth: random(),
     size: 0.45 + random() * 1.85,
     speed: 0.08 + random() * 0.24,
-    hue: 184 + random() * 48,
+    // Cyan through violet with occasional rose tones: a wider but still cool
+    // palette keeps the cloud romantic without changing the optical carrier.
+    hue: 178 + random() * 142,
   }));
 })();
 
@@ -72,9 +74,9 @@ export function renderParticleFrame({
     centerY,
     side * 0.68,
   );
-  background.addColorStop(0, "#07172a");
-  background.addColorStop(0.55, "#030914");
-  background.addColorStop(1, "#010307");
+  background.addColorStop(0, "#0a1d3a");
+  background.addColorStop(0.55, "#050b20");
+  background.addColorStop(1, "#01030a");
   context.fillStyle = background;
   context.fillRect(0, 0, width, height);
 
@@ -88,7 +90,7 @@ export function renderParticleFrame({
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
       0.052 +
-      (positive ? strength : -strength) * 0.13 * borderBoost;
+      (positive ? strength : -strength) * 0.15 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,
@@ -125,10 +127,10 @@ export function renderParticleFrame({
       centerY +
       Math.sin(angle) * radius * (0.72 + particle.depth * 0.24);
     const shimmer =
-      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.34;
+      (0.42 + Math.sin(time * 0.0007 + particle.angle * 9) * 0.18) * 0.27;
 
     context.beginPath();
-    context.fillStyle = `hsla(${particle.hue}, 92%, 68%, ${shimmer})`;
+    context.fillStyle = `hsla(${particle.hue}, 98%, ${72 + particle.depth * 8}%, ${shimmer})`;
     context.arc(
       x,
       y,
