@@ -216,6 +216,8 @@ El tiempo mostrado ahora incluye muestreo geométrico, salud RGB, ocho transform
 
 La liberación también exige consenso temporal de orientación. El receptor mantiene una ventana de ocho ganadores sobre las ocho rotaciones y reflejos; las claves de recorte próximas pueden cambiar con el movimiento de la mano, pero una transformación debe conservar al menos dos tercios de los votos y superar la comprobación de margen frente a la segunda opción. Se requieren tres observaciones para bloquear y dos fotogramas de evidencia suave del mismo candidato antes de decodificar; perder señal borra los votos. `C` muestra la fuerza del consenso y el magenta indica ambigüedad que bloquea la liberación antes de Hamming y CRC.
 
+La cámara usa una máquina de estados explícita: inactiva, activa, suspendida o finalizada. Ocultar la página o recibir un mute temporal suspende los callbacks y borra historial de fase, evidencia suave, votos de orientación, modelos temporales/de carga y sesiones Fountain parciales. Solo se reanuda si la página está visible y la misma pista sigue live y sin mute, siempre con sincronización nueva. Una pista ended nunca se reutiliza y la interfaz solicita reiniciar el escáner; un fallo de inicio también detiene todas las pistas adquiridas.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1

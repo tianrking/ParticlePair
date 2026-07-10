@@ -28,6 +28,7 @@ import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } from "../lib/frame-timing";
 import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
 import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/candidate-consensus";
+import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 
 interface OpticalScannerProps {
   language: Language;
@@ -40,7 +41,7 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "softfocus" | "timing" | "ambiguous" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" | "softfocus" | "timing" | "ambiguous" | "background" | "interrupted" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
@@ -95,6 +96,10 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return language === "zh" ? "相机帧间隔波动较大 · 请保持页面在前台并关闭省电模式" : language === "es" ? "Cadencia de cámara inestable · mantén la página visible y desactiva el ahorro de energía" : "Camera cadence is unstable · keep the page visible and disable battery saver";
     case "ambiguous":
       return language === "zh" ? "方向候选存在歧义 · 请保持设备稳定并让四角完整入框" : language === "es" ? "Orientación ambigua · mantén el dispositivo estable y encuadra las cuatro esquinas" : "Orientation is ambiguous · hold steady and keep all four corners in frame";
+    case "background":
+      return language === "zh" ? "扫描已安全暂停 · 返回前台后将重新同步" : language === "es" ? "Escaneo pausado de forma segura · se resincronizará al volver" : "Scanning safely paused · synchronization restarts when you return";
+    case "interrupted":
+      return language === "zh" ? "相机连接已中断 · 请重新启动扫描" : language === "es" ? "Conexión de cámara interrumpida · reinicia el escaneo" : "Camera connection interrupted · restart the scanner";
     default:
       return copy.align;
   }
@@ -178,6 +183,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const timingRef = useRef(new FrameTimingEstimator());
   const loadRef = useRef(new ScanLoadController());
   const consensusRef = useRef(new CandidateConsensus());
+  const lifecycleRef = useRef(new CameraLifecycle());
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
@@ -198,11 +204,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     }
   };
 
-  const stop = () => {
-    cancelScheduledFrame();
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-    runningRef.current = false;
+  const resetScannerEvidence = () => {
     historyRef.current = [];
     evidenceRef.current.clear();
     v2DecoderRef.current = new V2FountainDecoder();
@@ -210,14 +212,62 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     timingRef.current.reset();
     loadRef.current.reset();
     consensusRef.current.reset();
-    setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
-    setRunning(false);
+    lastTelemetryRef.current = 0;
     setQuality(0);
+    setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
+  };
+
+  const detachTrackHandlers = () => streamRef.current?.getVideoTracks().forEach((track) => { track.onended = null; track.onmute = null; track.onunmute = null; });
+
+  const stop = () => {
+    cancelScheduledFrame();
+    detachTrackHandlers();
+    lifecycleRef.current.transition("stop");
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    runningRef.current = false;
+    resetScannerEvidence();
+    setRunning(false);
     setMessage({ kind: "stopped" });
   };
 
+  const suspend = (kind: "background" | "interrupted") => {
+    if (lifecycleRef.current.state !== "running") return;
+    lifecycleRef.current.transition("suspend");
+    cancelScheduledFrame();
+    resetScannerEvidence();
+    setMessage({ kind });
+  };
+
+  const resume = () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || lifecycleRef.current.state !== "suspended" || !canResumeCameraTrack(document.visibilityState, track.readyState, track.muted)) return;
+    lifecycleRef.current.transition("resume");
+    resetScannerEvidence();
+    setMessage({ kind: "searching" });
+    scheduleNextFrame();
+  };
+
+  const handleTrackEnded = () => {
+    cancelScheduledFrame();
+    lifecycleRef.current.transition("end");
+    detachTrackHandlers();
+    streamRef.current = null;
+    runningRef.current = false;
+    resetScannerEvidence();
+    setRunning(false);
+    setMessage({ kind: "interrupted" });
+  };
+
+  useEffect(() => {
+    const handleVisibility = () => document.visibilityState === "hidden" ? suspend("background") : resume();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  });
+
   useEffect(() => {
     const video = videoRef.current;
+    const lifecycle = lifecycleRef.current;
     return () => {
       if (
         schedulerRef.current === "video" &&
@@ -228,13 +278,15 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       } else {
         cancelAnimationFrame(frameRef.current);
       }
+      detachTrackHandlers();
+      lifecycle.transition("stop");
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
   function scheduleNextFrame(): void {
     const video = videoRef.current;
-    if (!video || !runningRef.current) return;
+    if (!video || !runningRef.current || lifecycleRef.current.state !== "running") return;
 
     if (typeof video.requestVideoFrameCallback === "function") {
       schedulerRef.current = "video";
@@ -254,9 +306,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     if (
       !video ||
       !runningRef.current ||
+      lifecycleRef.current.state !== "running" ||
       video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
     ) {
-      scheduleNextFrame();
+      if (lifecycleRef.current.state === "running") scheduleNextFrame();
       return;
     }
 
@@ -455,27 +508,29 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       }
       video.srcObject = stream;
       await video.play();
-      historyRef.current = [];
-      evidenceRef.current.clear();
-      v2DecoderRef.current = new V2FountainDecoder();
-      adaptiveSearchRef.current.reset();
-      timingRef.current.reset();
-      loadRef.current.reset();
-      consensusRef.current.reset();
-      lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
+      resetScannerEvidence();
       runningRef.current = true;
+      lifecycleRef.current.transition("start");
+      const track = stream.getVideoTracks()[0];
+      if (track) { track.onended = handleTrackEnded; track.onmute = () => suspend("interrupted"); track.onunmute = resume; }
       setRunning(true);
       setMessage({ kind: "searching" });
       scheduleNextFrame();
     } catch {
+      detachTrackHandlers();
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      runningRef.current = false;
+      lifecycleRef.current.transition("stop");
+      resetScannerEvidence();
+      setRunning(false);
       setMessage({ kind: "permission" });
     }
   };
 
   return (
     <div className="scanner-shell">
-      <div className={`camera-stage ${running ? "is-running" : ""}`}>
+      <div className={["camera-stage", running && "is-running", lifecycleRef.current.state === "suspended" && "is-suspended"].filter(Boolean).join(" ")}>
         <video ref={videoRef} muted playsInline aria-label={copy.cameraView} />
         <div className="camera-placeholder" aria-hidden={running}>
           <span className="scanner-orbit" />

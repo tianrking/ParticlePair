@@ -183,6 +183,9 @@ main { min-height:100vh; overflow:hidden; }
 .camera-stage.is-running video { opacity:1; }
 .camera-placeholder { position:absolute; inset:0; display:grid; place-items:center; align-content:center; gap:13px; color:#899190; font-family:var(--font-geist-mono),monospace; font-size:8px; letter-spacing:.2em; }
 .camera-stage.is-running .camera-placeholder { display:none; }
+.camera-stage.is-suspended video { opacity:.34; filter:saturate(.55) blur(1px); transition:opacity .25s,filter .25s; }
+.camera-stage.is-suspended .scan-frame { border-color:rgba(255,179,73,.2); }
+.camera-stage.is-suspended .scan-frame i { border-color:#ffb85d; box-shadow:0 0 12px rgba(255,144,55,.22); }
 .scanner-orbit { width:52px; height:52px; border:1px solid #59605f; border-radius:50%; box-shadow:inset 0 0 0 10px #242a2c; }
 .scan-frame { position:absolute; width:auto; height:76%; aspect-ratio:1; left:50%; top:50%; transform:translate(-50%,-50%); border:1px solid rgba(255,255,255,.12); }
 .scan-frame i { position:absolute; width:16px; height:16px; border-color:var(--cyan); border-style:solid; }

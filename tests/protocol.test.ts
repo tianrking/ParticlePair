@@ -29,6 +29,7 @@ import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adapt
 import { FrameTimingEstimator, selectPhaseReference } from "../lib/frame-timing";
 import { ScanLoadController } from "../lib/scan-load";
 import { CandidateConsensus } from "../lib/candidate-consensus";
+import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -193,6 +194,25 @@ test("candidate consensus rejects alternating orientation winners and resets on 
   assert.equal(consensus.snapshot().state, "ambiguous"); assert.equal(consensus.canDecode("identity"), false); assert.equal(consensus.canDecode("mirror"), false);
   consensus.observe([{ key: "noise", quality: 0.12, transform: "identity" }]);
   assert.equal(consensus.snapshot().state, "measuring"); assert.equal(consensus.snapshot().confidence, 0);
+});
+
+test("camera lifecycle only resumes a suspended live foreground track", () => {
+  const lifecycle = new CameraLifecycle();
+  assert.equal(lifecycle.transition("resume"), "idle");
+  assert.equal(lifecycle.transition("start"), "running");
+  assert.equal(lifecycle.transition("suspend"), "suspended");
+  assert.equal(lifecycle.transition("resume"), "running");
+  assert.equal(lifecycle.transition("end"), "ended");
+  assert.equal(lifecycle.transition("resume"), "ended");
+  assert.equal(lifecycle.transition("start"), "running");
+  assert.equal(lifecycle.transition("stop"), "idle");
+});
+
+test("camera resume guard rejects hidden, muted, or ended tracks", () => {
+  assert.equal(canResumeCameraTrack("visible", "live", false), true);
+  assert.equal(canResumeCameraTrack("hidden", "live", false), false);
+  assert.equal(canResumeCameraTrack("visible", "live", true), false);
+  assert.equal(canResumeCameraTrack("visible", "ended", false), false);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

@@ -216,6 +216,8 @@ The displayed processing time now covers geometry sampling, RGB health analysis,
 
 Candidate release also requires cross-frame orientation consensus. The receiver keeps an eight-winner window over the eight rotation/mirror transforms; nearby crop keys may move as the hand moves, but a transform must hold at least a two-thirds majority and survive the runner-up margin check. Three observations are required to establish a lock, at least two soft-evidence frames from the same candidate are required before decode, and signal loss clears the vote immediately. `C` shows consensus strength; magenta means ambiguous orientation and prevents release even before Hamming and CRC validation.
 
+Camera lifetime is an explicit state machine: idle, running, suspended, or ended. Hiding the page or receiving a temporary track mute safely suspends callbacks and clears phase history, soft evidence, orientation votes, timing/load models, and partial Fountain sessions. Resume is legal only when the page is visible and the same track is still live and unmuted; it always starts with fresh synchronization. An `ended` track is never reused and the UI asks for an explicit scanner restart. Failed startup also stops every acquired track instead of leaking camera access.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1
