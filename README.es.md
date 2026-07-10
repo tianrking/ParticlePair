@@ -91,7 +91,7 @@ La imagen busca transmitir una sensación ambiental a las personas sin dejar de 
 
 - Este repositorio no ha recibido una auditoría criptográfica, de seguridad de hardware ni de seguridad independiente para producción.
 - Las pruebas automatizadas cubren el empaquetado, la corrección, el rechazo por CRC, el renderizado y ambas compilaciones de despliegue. No demuestran la fiabilidad del enlace físico en una matriz amplia de dispositivos.
-- El escáner busca escalas y desplazamientos próximos y recupera entradas rotadas o reflejadas, pero todavía depende de una alineación guiada y no ofrece detección automática de esquinas, corrección de perspectiva ni calibración del dispositivo.
+- El escáner busca escalas y desplazamientos próximos, recupera entradas rotadas o reflejadas y aplica candidatos de homografía acotados para distorsiones trapezoidales comunes. Aún depende de la alineación guiada y no infiere esquinas arbitrarias ni calibra el dispositivo automáticamente.
 - El uso se limita a lo permitido por la [PolyForm Noncommercial License 1.0.0](./LICENSE). Consulta la [información de licencia comercial](./COMMERCIAL-LICENSE.md) para cualquier otro uso.
 
 ## Cómo funciona
@@ -202,6 +202,8 @@ El despliegue sigue sujeto a la licencia del repositorio y **no** concede permis
 
 `SYNC` representa evidencia calibrada por encima del nivel de correlación aleatoria; no es un medidor genérico de actividad de la cámara. Las escenas no relacionadas deberían permanecer cerca de 0%; los valores superiores al 30% se tratan como candidatos de sincronía y los valores iguales o superiores al 47% pueden entrar en la decodificación multifotograma. La interfaz solo informa de éxito cuando el paquete también supera la decodificación Hamming y la validación CRC-16.
 
+El receptor comienza con 61 geometrías de recorte y perspectiva. Un controlador con histéresis reduce la búsqueda a 45 geometrías tras cinco observaciones estables y a 25 después de mantener calidad de decodificación. Una caída de calidad amplía la búsqueda en una o dos observaciones. Cada cambio de nivel invalida el historial incompatible; la interfaz solo muestra el nivel, el número de geometrías y el tiempo de muestreo local, nunca el contenido transmitido.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1
@@ -302,7 +304,7 @@ npm run build:vercel
 
 ## Limitaciones conocidas
 
-- No hay detección automática del borde del código ni corrección de perspectiva.
+- No hay detección automática de bordes o esquinas; la recuperación de perspectiva usa cinco homografías acotadas, no una estimación arbitraria del cuadrilátero.
 - La búsqueda de escala y desplazamiento es limitada; todo el código debe permanecer dentro de la guía.
 - No existe calibración automática del espacio de color de la pantalla, balance de blancos de la cámara ni frecuencia de actualización.
 - La diafonía cromática de la cámara puede filtrar una pequeña parte de la galaxia decorativa roja/azul al canal verde de la portadora.
@@ -314,7 +316,7 @@ npm run build:vercel
 
 ## Hoja de ruta
 
-- [ ] Detección de esquinas y corrección de perspectiva
+- [ ] Detección automática de esquinas y refinamiento de cuadriláteros más allá de la búsqueda acotada
 - [x] Recuperación de rotación y reflejo
 - [ ] Flujo de calibración de pantalla y cámara
 - [ ] Decodificación por decisión suave y códigos de borrado más potentes

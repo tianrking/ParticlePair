@@ -25,6 +25,7 @@ import { derivePairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, type PerspectiveQuad } from "../lib/perspective-sampling";
+import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adaptive-optical-search";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -111,6 +112,27 @@ test("hierarchical perspective search stays inside the mobile candidate budget",
   const crops = guideCropCandidates({ x: 0, y: 0, width: 1280, height: 720 });
   const candidateCount = crops.reduce((sum, crop) => sum + perspectiveCandidatesForCrop(crop.key, 36).length, 0);
   assert.equal(crops.length, 25); assert.equal(candidateCount, 61); assert.ok(candidateCount < 75);
+});
+
+test("adaptive geometry tiers preserve deterministic candidate budgets", () => {
+  const crops = guideCropCandidates({ x: 0, y: 0, width: 1280, height: 720 });
+  for (const [tier, expected] of [["acquire", 61], ["track", 45], ["lock", 25]] as const) {
+    const count = crops.reduce((sum, crop) => sum + perspectiveCandidatesForCrop(crop.key, 36, tier).length, 0);
+    assert.equal(count, expected); assert.equal(opticalSearchCandidateLabel(tier), expected);
+  }
+});
+
+test("adaptive search contracts slowly and expands immediately after sync loss", () => {
+  const search = new AdaptiveOpticalSearch();
+  for (let frame = 0; frame < 5; frame += 1) search.observe({ bestKey: "1:0:0:flat", quality: 0.4, sampleDurationMs: 8 });
+  assert.equal(search.tier, "track");
+  for (let frame = 0; frame < 10; frame += 1) search.observe({ bestKey: "1:0:0:flat", quality: 0.72, sampleDurationMs: 7 });
+  assert.equal(search.tier, "lock");
+  search.observe({ bestKey: "1:0:0:flat", quality: 0.31, sampleDurationMs: 7 });
+  assert.equal(search.tier, "track");
+  search.observe({ quality: 0.12, sampleDurationMs: 7 });
+  search.observe({ quality: 0.12, sampleDurationMs: 7 });
+  assert.equal(search.tier, "acquire");
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

@@ -1,6 +1,7 @@
 export interface Point2D { x: number; y: number }
 export interface PerspectiveQuad { bottomLeft: Point2D; bottomRight: Point2D; topLeft: Point2D; topRight: Point2D }
 export interface NamedPerspectiveQuad { key: string; quad: PerspectiveQuad }
+export type PerspectiveSearchTier = "acquire" | "track" | "lock";
 
 interface Homography { a: number; b: number; c: number; d: number; e: number; f: number; g: number; h: number }
 
@@ -47,7 +48,9 @@ export function keystoneQuadCandidates(size: number): NamedPerspectiveQuad[] {
   ];
 }
 
-export function perspectiveCandidatesForCrop(cropKey: string, size: number): NamedPerspectiveQuad[] {
+export function perspectiveCandidatesForCrop(cropKey: string, size: number, tier: PerspectiveSearchTier = "acquire"): NamedPerspectiveQuad[] {
   const candidates = keystoneQuadCandidates(size);
+  if (tier === "lock") return candidates.slice(0, 1);
+  if (tier === "track") return cropKey.endsWith(":0:0") ? candidates : candidates.slice(0, 1);
   return cropKey.endsWith(":0:0") || cropKey.startsWith("1:") ? candidates : candidates.slice(0, 1);
 }

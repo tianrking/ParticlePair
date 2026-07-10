@@ -17,6 +17,11 @@ import {
   objectFitCoverSourceRectangle,
 } from "../lib/camera-geometry";
 import { perspectiveCandidatesForCrop, samplePerspectiveGrid } from "../lib/perspective-sampling";
+import {
+  AdaptiveOpticalSearch,
+  opticalSearchCandidateLabel,
+  type OpticalSearchTier,
+} from "../lib/adaptive-optical-search";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
@@ -83,6 +88,7 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
 function sampleVideoCandidates(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
+  tier: OpticalSearchTier,
 ): OpticalSampleCandidate[] {
   canvas.width = PERSPECTIVE_PATCH_SIZE;
   canvas.height = PERSPECTIVE_PATCH_SIZE;
@@ -117,13 +123,23 @@ function sampleVideoCandidates(
       PERSPECTIVE_PATCH_SIZE,
       PERSPECTIVE_PATCH_SIZE,
     ).data;
-    for (const perspective of perspectiveCandidatesForCrop(crop.key, PERSPECTIVE_PATCH_SIZE)) candidates.push({
+    for (const perspective of perspectiveCandidatesForCrop(crop.key, PERSPECTIVE_PATCH_SIZE, tier)) candidates.push({
       key: `${crop.key}:${perspective.key}`,
       values: samplePerspectiveGrid(pixels, PERSPECTIVE_PATCH_SIZE, PERSPECTIVE_PATCH_SIZE, perspective.quad, GRID_SIZE),
     });
   }
 
   return candidates;
+}
+
+function timedVideoCandidates(
+  video: HTMLVideoElement,
+  canvas: HTMLCanvasElement,
+  tier: OpticalSearchTier,
+): { candidates: OpticalSampleCandidate[]; durationMs: number } {
+  const started = performance.now();
+  const candidates = sampleVideoCandidates(video, canvas, tier);
+  return { candidates, durationMs: performance.now() - started };
 }
 
 export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
@@ -137,8 +153,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const evidenceRef = useRef<Map<string, EvidenceBucket>>(new Map());
   const lastSuccessRef = useRef(0);
   const v2DecoderRef = useRef(new V2FountainDecoder());
+  const adaptiveSearchRef = useRef(new AdaptiveOpticalSearch());
+  const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
+  const [telemetry, setTelemetry] = useState({ candidates: 61, durationMs: 0, tier: "acquire" as OpticalSearchTier });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -163,6 +182,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     historyRef.current = [];
     evidenceRef.current.clear();
     v2DecoderRef.current = new V2FountainDecoder();
+    adaptiveSearchRef.current.reset();
+    setTelemetry({ candidates: 61, durationMs: 0, tier: "acquire" });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -215,10 +236,18 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     const canvas =
       samplingCanvasRef.current ?? document.createElement("canvas");
     samplingCanvasRef.current = canvas;
+    const tier = adaptiveSearchRef.current.tier;
+    const sampled = timedVideoCandidates(video, canvas, tier);
     const current: OpticalSampleFrame = {
-      candidates: sampleVideoCandidates(video, canvas),
+      candidates: sampled.candidates,
       timestamp,
     };
+    const sampleDurationMs = sampled.durationMs;
+
+    if (timestamp - lastTelemetryRef.current >= 250) {
+      lastTelemetryRef.current = timestamp;
+      setTelemetry({ candidates: current.candidates.length, durationMs: sampleDurationMs, tier });
+    }
 
     const history = historyRef.current;
     const reference = history
@@ -246,6 +275,21 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       const score = best?.analysis.quality ?? 0;
       const percent = Math.round(score * 100);
       setQuality(percent);
+
+      const decision = adaptiveSearchRef.current.observe({
+        bestKey: best?.key,
+        quality: score,
+        sampleDurationMs,
+      });
+      if (decision.changed) {
+        historyRef.current = [];
+        evidenceRef.current.clear();
+        setTelemetry({
+          candidates: opticalSearchCandidateLabel(decision.tier),
+          durationMs: sampleDurationMs,
+          tier: decision.tier,
+        });
+      }
 
       for (const [key, bucket] of evidenceRef.current) {
         if (timestamp - bucket.lastTimestamp > 1200) {
@@ -371,6 +415,9 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       historyRef.current = [];
       evidenceRef.current.clear();
       v2DecoderRef.current = new V2FountainDecoder();
+      adaptiveSearchRef.current.reset();
+      lastTelemetryRef.current = 0;
+      setTelemetry({ candidates: 61, durationMs: 0, tier: "acquire" });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -392,7 +439,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
-        <span className="perspective-label">HOMOGRAPHY · 61 CANDIDATES</span>
+        <div className="scanner-telemetry" aria-label="Scanner performance telemetry">
+          <span>{telemetry.tier.toUpperCase()}</span>
+          <span>{telemetry.candidates} GEOMETRIES</span>
+          <span>{telemetry.durationMs.toFixed(1)} MS</span>
+        </div>
         <div
           className="scan-quality"
           role="progressbar"

@@ -91,7 +91,7 @@ The visual is meant to feel ambient to a person while remaining structurally dec
 
 - This repository has not received a production cryptographic, hardware-security, or independent security audit.
 - Automated tests cover framing, correction, CRC rejection, rendering, and both deployment builds. They do not prove physical-link reliability across a broad device matrix.
-- The scanner searches nearby crop scales and offsets and recovers rotation or mirroring, but it still relies on guided alignment and does not yet provide automatic corner detection, perspective correction, or device calibration.
+- The scanner searches nearby crop scales and offsets, recovers rotation or mirroring, and applies bounded homography candidates for common keystone distortion. It still relies on guided alignment and does not yet infer arbitrary corners or calibrate a device automatically.
 - Use is limited to purposes permitted by the [PolyForm Noncommercial License 1.0.0](./LICENSE). See [commercial licensing](./COMMERCIAL-LICENSE.md) for other use.
 
 ## How it works
@@ -202,6 +202,8 @@ Deployment is still governed by the repository license and does **not** grant co
 
 `SYNC` is calibrated evidence above the random-correlation floor, not a generic camera activity meter. Unrelated scenes should remain at or near 0%; values above 30% are treated as synchronization candidates, and values at or above 47% can enter multi-frame decoding. The UI reports success only after the packet also passes Hamming decoding and CRC-16 validation.
 
+The receiver starts with 61 crop/perspective geometries. A hysteresis controller contracts the search to 45 geometries after five stable observations and to 25 after a sustained decode-quality lock. A quality drop expands the search within one or two observations. Every tier change invalidates incompatible frame history; the camera overlay exposes the active tier, geometry count, and local sampling time without including payload data.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1
@@ -302,7 +304,7 @@ npm run build:vercel
 
 ## Known limitations
 
-- No automatic code-boundary detection or perspective correction.
+- No automatic code-boundary/corner detection; perspective recovery is a bounded five-shape homography search rather than arbitrary quadrilateral estimation.
 - Scale and offset search are bounded; the complete code must remain inside the guide.
 - No automatic screen color-space, camera white-balance, or refresh-rate calibration.
 - Camera color crosstalk can leak a small amount of the red/blue decorative galaxy into the green carrier channel.
@@ -314,7 +316,7 @@ npm run build:vercel
 
 ## Roadmap
 
-- [ ] Corner detection and perspective correction
+- [ ] Automatic corner detection and arbitrary-quadrilateral refinement beyond the bounded homography search
 - [x] Rotation and mirror recovery
 - [ ] Screen/camera calibration workflow
 - [x] Quality-weighted soft-decision decoding and fountain erasure recovery
