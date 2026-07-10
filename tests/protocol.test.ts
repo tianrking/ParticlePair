@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { extractPayloadBits, layoutBits } from "../lib/optical-layout";
-import { decodeDifferentialFrames } from "../lib/optical-decoder";
+import {
+  analyzeDifferentialDifferences,
+  decodeDifferentialFrames,
+  OPTICAL_TRANSFORMS,
+  transformOpticalSamples,
+} from "../lib/optical-decoder";
+import { rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
@@ -26,6 +32,61 @@ test("differential pixel decoding removes exposure drift and restores the secret
   const { analysis, decoded } = decodeDifferentialFrames(current, reference);
   assert.deepEqual(decoded.secret, SECRET);
   assert.ok(analysis.quality > 0.9);
+});
+
+test("sync search recovers rotated and mirrored optical frames", () => {
+  const cells = layoutBits(encodeParticleCode(SECRET));
+  const canonicalDifferences = cells.map((cell) => (cell ? 72 : -72));
+
+  for (const appliedTransform of OPTICAL_TRANSFORMS) {
+    const observed = transformOpticalSamples(
+      canonicalDifferences,
+      appliedTransform,
+    );
+    const best = OPTICAL_TRANSFORMS.map((candidateTransform) => {
+      const canonical = transformOpticalSamples(observed, candidateTransform);
+      return analyzeDifferentialDifferences(canonical);
+    }).sort((left, right) => right.quality - left.quality)[0];
+
+    const decoded = decodeParticleCode(extractPayloadBits(best.cells));
+    assert.deepEqual(decoded.secret, SECRET);
+    assert.ok(best.quality > 0.9);
+  }
+});
+
+test("camera candidate ranking decodes transformed opposite-phase samples", () => {
+  const cells = layoutBits(encodeParticleCode(SECRET));
+  const reference = cells.map((cell) => (cell ? 28 : 112));
+  const current = cells.map((cell) => (cell ? 121 : 37));
+
+  for (const appliedTransform of OPTICAL_TRANSFORMS) {
+    const ranked = rankOpticalFrameAnalyses(
+      {
+        candidates: [
+          {
+            key: "guided-crop",
+            values: transformOpticalSamples(current, appliedTransform),
+          },
+        ],
+        timestamp: 300,
+      },
+      {
+        candidates: [
+          {
+            key: "guided-crop",
+            values: transformOpticalSamples(reference, appliedTransform),
+          },
+        ],
+        timestamp: 0,
+      },
+    );
+
+    const decoded = decodeParticleCode(
+      extractPayloadBits(ranked[0].analysis.cells),
+    );
+    assert.deepEqual(decoded.secret, SECRET);
+    assert.ok(ranked[0].analysis.quality > 0.9);
+  }
 });
 
 test("Hamming coding corrects one flipped bit in separate codewords", () => {

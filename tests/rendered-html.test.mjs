@@ -23,6 +23,10 @@ test("server-renders the ParticlePair product shell", async () => {
   assert.match(html, /让配对码/);
   assert.match(html, /广播粒子码/);
   assert.match(html, /相机接收/);
+  assert.match(html, /从动态画面恢复密钥/);
+  assert.match(html, /scan-quality-label/);
+  assert.match(html, /SYNC/);
   assert.match(html, /Hamming\(12,8\)/);
+  assert.doesNotMatch(html, /value="[0-9a-f]{32}"/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });

@@ -3,6 +3,7 @@ import {
   extractPayloadBits,
   isBorderCell,
   synchronizationBit,
+  GRID_SIZE,
 } from "./optical-layout";
 import { decodeParticleCode, type DecodedParticleCode } from "./protocol";
 
@@ -12,6 +13,65 @@ export interface DifferentialFrameAnalysis {
   exposureShift: number;
   orientation: 1 | -1;
   quality: number;
+}
+
+export const OPTICAL_TRANSFORMS = [
+  "identity",
+  "rotate90",
+  "rotate180",
+  "rotate270",
+  "mirror",
+  "mirrorRotate90",
+  "mirrorRotate180",
+  "mirrorRotate270",
+] as const;
+
+export type OpticalTransform = (typeof OPTICAL_TRANSFORMS)[number];
+
+/** Apply one of the eight square-grid symmetries to observed optical samples. */
+export function transformOpticalSamples(
+  samples: readonly number[],
+  transform: OpticalTransform,
+): number[] {
+  if (samples.length !== CELL_COUNT) {
+    throw new Error(`Optical samples must contain exactly ${CELL_COUNT} cells`);
+  }
+
+  const mirrored = transform.startsWith("mirror");
+  const rotation = transform.endsWith("Rotate90")
+    ? 1
+    : transform.endsWith("Rotate180")
+      ? 2
+      : transform.endsWith("Rotate270")
+        ? 3
+        : transform === "rotate90"
+          ? 1
+          : transform === "rotate180"
+            ? 2
+            : transform === "rotate270"
+              ? 3
+              : 0;
+
+  return Array.from({ length: CELL_COUNT }, (_, outputIndex) => {
+    const outputRow = Math.floor(outputIndex / GRID_SIZE);
+    const outputColumn = outputIndex % GRID_SIZE;
+    let sourceRow = outputRow;
+    let sourceColumn = outputColumn;
+
+    if (rotation === 1) {
+      sourceRow = GRID_SIZE - 1 - outputColumn;
+      sourceColumn = outputRow;
+    } else if (rotation === 2) {
+      sourceRow = GRID_SIZE - 1 - outputRow;
+      sourceColumn = GRID_SIZE - 1 - outputColumn;
+    } else if (rotation === 3) {
+      sourceRow = outputColumn;
+      sourceColumn = GRID_SIZE - 1 - outputRow;
+    }
+
+    if (mirrored) sourceColumn = GRID_SIZE - 1 - sourceColumn;
+    return samples[sourceRow * GRID_SIZE + sourceColumn];
+  });
 }
 
 /**
@@ -30,7 +90,18 @@ export function analyzeDifferentialFrames(
     throw new Error(`Optical samples must contain exactly ${CELL_COUNT} cells`);
   }
 
-  const rawDifferences = current.map((value, index) => value - reference[index]);
+  return analyzeDifferentialDifferences(
+    current.map((value, index) => value - reference[index]),
+  );
+}
+
+export function analyzeDifferentialDifferences(
+  rawDifferences: readonly number[],
+): DifferentialFrameAnalysis {
+  if (rawDifferences.length !== CELL_COUNT) {
+    throw new Error(`Optical differences must contain exactly ${CELL_COUNT} cells`);
+  }
+
   const borderSamples = rawDifferences
     .map((difference, index) => ({
       difference,

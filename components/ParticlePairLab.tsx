@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element -- These are client-generated PNG evidence frames, not network assets. */
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ParticleCloud } from "./ParticleCloud";
 import { OpticalScanner } from "./OpticalScanner";
 import { extractPayloadBits, isBorderCell, layoutBits } from "../lib/optical-layout";
@@ -25,7 +25,7 @@ function randomSecretHex(): string {
 
 export function ParticlePairLab() {
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
-  const [secretHex, setSecretHex] = useState(() => randomSecretHex());
+  const [secretHex, setSecretHex] = useState("");
   const [strength, setStrength] = useState(0.72);
   const [paused, setPaused] = useState(false);
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
@@ -34,6 +34,15 @@ export function ParticlePairLab() {
   const [pixelTestStatus, setPixelTestStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [pixelTestDetail, setPixelTestDetail] = useState("尚未读取真实Canvas像素");
   const [pixelResult, setPixelResult] = useState<RenderedPixelLoopbackResult | null>(null);
+
+  useEffect(() => {
+    // Generate the initial secret only after hydration so it never appears in
+    // server-rendered HTML and cannot diverge between the server and iOS Safari.
+    const initializationFrame = window.requestAnimationFrame(() => {
+      setSecretHex(randomSecretHex());
+    });
+    return () => window.cancelAnimationFrame(initializationFrame);
+  }, []);
 
   const frame = useMemo(() => {
     try {
@@ -58,11 +67,16 @@ export function ParticlePairLab() {
     if (!canvas || !validSecret) return;
 
     setPixelTestStatus("running");
-    setPixelTestDetail("正在从动态Canvas捕获相反光学相位…");
+    setPixelTestDetail("正在用同一渲染器生成确定性双相PNG…");
     setPixelResult(null);
 
     try {
-      const decoded = await runRenderedPixelLoopback(canvas, secretHex);
+      const decoded = await runRenderedPixelLoopback(
+        canvas,
+        frame,
+        strength,
+        secretHex,
+      );
       setPixelResult(decoded);
       setResult({
         correctedCodewords: decoded.correctedCodewords,
@@ -76,7 +90,7 @@ export function ParticlePairLab() {
 
       setPixelTestStatus("success");
       setPixelTestDetail(
-        `PNG像素解码成功 · 同步质量 ${Math.round(decoded.quality * 100)}% · Hamming纠正 ${decoded.correctedCodewords} 个码字`,
+        `Canvas双相解码成功 · 同步质量 ${Math.round(decoded.quality * 100)}% · Hamming纠正 ${decoded.correctedCodewords} 个码字`,
       );
     } catch (error) {
       setPixelTestStatus("error");

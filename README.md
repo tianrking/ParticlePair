@@ -64,7 +64,7 @@ The visual is meant to feel ambient to a person while remaining structurally dec
 
 - This repository has not received a production cryptographic, hardware-security, or independent security audit.
 - Automated tests cover framing, correction, CRC rejection, rendering, and both deployment builds. They do not prove physical-link reliability across a broad device matrix.
-- The current scanner assumes manual alignment and the expected orientation. It does not yet provide corner detection, perspective correction, rotation recovery, or device calibration.
+- The scanner searches nearby crop scales and offsets and recovers rotation or mirroring, but it still relies on guided alignment and does not yet provide automatic corner detection, perspective correction, or device calibration.
 - Use is limited to purposes permitted by the [PolyForm Noncommercial License 1.0.0](./LICENSE). See [commercial licensing](./COMMERCIAL-LICENSE.md) for other use.
 
 ## How it works
@@ -94,7 +94,8 @@ A person mainly sees particles rotating, breathing, gathering, and dispersing. T
 - Validate with CRC-16/CCITT-FALSE.
 - Correct one bit in each Hamming(12,8) codeword.
 - Render an 18×18 optical grid as an animated Canvas 2D particle cloud.
-- Decode from a browser camera with center crop, downsampling, exposure-drift cancellation, and sync correlation.
+- Decode from a browser camera with timestamped video-frame pairing, multi-scale crop search, rotation/mirror recovery, soft evidence accumulation, exposure-drift cancellation, and sync correlation.
+- Render deterministic opposite-phase PNGs for a platform-independent Canvas pixel loopback test.
 - Run a local loopback test with injected errors in independent codewords.
 - Build for both Cloudflare Worker/Sites and native Next.js/Vercel.
 
@@ -190,7 +191,7 @@ ParticlePair is the project. **Particle Code v1** is its current optical frame p
 - Encoded payload: 252 cells.
 - Remaining cells: four deterministic padding bits.
 
-The asymmetric border lets the receiver infer the sign of the differential phase. The scanner currently expects the original orientation and does not handle 90° rotation or mirroring.
+The asymmetric border lets the receiver infer the sign of the differential phase and search all four rotations plus mirrored input.
 
 ### Error correction
 
@@ -224,19 +225,19 @@ npm run build:vercel
 ## Known limitations
 
 - No automatic code-boundary detection or perspective correction.
-- No 90° rotation or mirrored-input recovery.
+- Scale and offset search are bounded; the complete code must remain inside the guide.
 - No automatic screen color-space, camera white-balance, or refresh-rate calibration.
 - Decorative particle motion still introduces differential noise.
 - Hamming correction is limited to one bit per codeword.
 - No timestamps, session binding, consumed-secret state, or replay prevention.
-- Background browser throttling can break stable phase timing.
+- Extreme rolling shutter, PWM, or exposure changes can still exceed the correction budget.
 - No backward-compatibility guarantee for the experimental protocol.
 - No public, reproducible cross-device success-rate dataset yet.
 
 ## Roadmap
 
 - [ ] Corner detection and perspective correction
-- [ ] Rotation and mirror recovery
+- [x] Rotation and mirror recovery
 - [ ] Screen/camera calibration workflow
 - [ ] Soft-decision decoding and stronger erasure coding
 - [ ] Timestamp, nonce, session binding, and replay state

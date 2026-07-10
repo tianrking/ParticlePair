@@ -1,9 +1,9 @@
 import { GRID_SIZE } from "./optical-layout";
 import {
-  analyzeDifferentialFrames,
   decodeDifferentialFrames,
   type DifferentialFrameAnalysis,
 } from "./optical-decoder";
+import { renderParticleFrame } from "./particle-renderer";
 
 interface CapturedCanvasFrame {
   preview: HTMLCanvasElement;
@@ -20,10 +20,34 @@ export interface RenderedPixelLoopbackResult {
   referenceImage: string;
 }
 
-const CAPTURE_COUNT = 18;
-const CAPTURE_INTERVAL_MS = 50;
-const MINIMUM_SYNC_QUALITY = 0.52;
 const PREVIEW_SIZE = 240;
+
+function renderPhaseFrame(
+  source: HTMLCanvasElement,
+  cells: readonly boolean[],
+  strength: number,
+  phase: boolean,
+): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, source.width);
+  canvas.height = Math.max(1, source.height);
+  const context = canvas.getContext("2d", { alpha: false });
+  if (!context) throw new Error("无法创建确定性相位画布");
+
+  renderParticleFrame({
+    cells,
+    context,
+    height: canvas.height,
+    phase,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+    strength,
+    // Both phases intentionally use the same particle time so the differential
+    // test measures the optical code rather than decorative particle motion.
+    time: 1200,
+    width: canvas.width,
+  });
+  return canvas;
+}
 
 function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
   const sourceSide = Math.min(source.width, source.height);
@@ -130,66 +154,31 @@ function createDifferenceImage(analysis: DifferentialFrameAnalysis): string {
   return preview.toDataURL("image/png");
 }
 
-function wait(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
-/** Capture real rendered Canvas pixels and recover the secret from two phases. */
+/** Render real Canvas pixels for both phases and recover the secret deterministically. */
 export async function runRenderedPixelLoopback(
   canvas: HTMLCanvasElement,
+  cells: readonly boolean[],
+  strength: number,
   expectedSecretHex: string,
 ): Promise<RenderedPixelLoopbackResult> {
-  const captures: CapturedCanvasFrame[] = [];
-  let best:
-    | {
-        analysis: DifferentialFrameAnalysis;
-        current: CapturedCanvasFrame;
-        decoded: ReturnType<typeof decodeDifferentialFrames>["decoded"];
-        reference: CapturedCanvasFrame;
-      }
-    | undefined;
-
-  for (let captureIndex = 0; captureIndex < CAPTURE_COUNT; captureIndex += 1) {
-    if (captureIndex > 0) await wait(CAPTURE_INTERVAL_MS);
-    const current = captureCanvasFrame(canvas);
-
-    for (const reference of captures) {
-      const analysis = analyzeDifferentialFrames(
-        current.values,
-        reference.values,
-      );
-      if (
-        analysis.quality < MINIMUM_SYNC_QUALITY ||
-        (best && analysis.quality <= best.analysis.quality)
-      ) {
-        continue;
-      }
-
-      try {
-        const { decoded } = decodeDifferentialFrames(
-          current.values,
-          reference.values,
-        );
-        best = { analysis, current, decoded, reference };
-      } catch {
-        // Strong synchronization can still contain too many payload errors.
-      }
-    }
-
-    captures.push(current);
-  }
-
-  if (!best) {
-    throw new Error("真实像素帧未通过同步与CRC校验，请提高调制强度后重试");
-  }
+  const reference = captureCanvasFrame(
+    renderPhaseFrame(canvas, cells, strength, false),
+  );
+  const current = captureCanvasFrame(
+    renderPhaseFrame(canvas, cells, strength, true),
+  );
+  const { analysis, decoded } = decodeDifferentialFrames(
+    current.values,
+    reference.values,
+  );
 
   return {
-    correctedCodewords: best.decoded.correctedCodewords,
-    currentImage: best.current.preview.toDataURL("image/png"),
-    differenceImage: createDifferenceImage(best.analysis),
-    matchesExpected: best.decoded.secretHex === expectedSecretHex.toLowerCase(),
-    quality: best.analysis.quality,
-    recoveredSecretHex: best.decoded.secretHex,
-    referenceImage: best.reference.preview.toDataURL("image/png"),
+    correctedCodewords: decoded.correctedCodewords,
+    currentImage: current.preview.toDataURL("image/png"),
+    differenceImage: createDifferenceImage(analysis),
+    matchesExpected: decoded.secretHex === expectedSecretHex.toLowerCase(),
+    quality: analysis.quality,
+    recoveredSecretHex: decoded.secretHex,
+    referenceImage: reference.preview.toDataURL("image/png"),
   };
 }
