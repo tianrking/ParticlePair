@@ -27,6 +27,7 @@ import {
   type Language,
 } from "../lib/i18n";
 import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type VisualCategory, type VisualModeId } from "../lib/visual-modes";
+import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -92,6 +93,9 @@ export function ParticlePairLab() {
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
   const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
+  const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success">("idle");
+  const [qualityAuditProgress, setQualityAuditProgress] = useState(0);
+  const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
@@ -257,6 +261,17 @@ export function ParticlePairLab() {
       await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
     setChannelStatus(Object.values(results).every((result) => result.ok) ? "success" : "error");
+  };
+
+  const runVisualQualityAudit = async () => {
+    setQualityAuditStatus("running"); setQualityAuditProgress(0); setAutoShowcase(false);
+    const grades: Record<string, VisualQualityMetrics> = {};
+    for (let index = 0; index < VISUAL_MODES.length; index += 1) {
+      const mode = VISUAL_MODES[index]; grades[mode.id] = analyzeVisualModeQuality(frame, strength, mode.id);
+      setVisualGrades({ ...grades }); setQualityAuditProgress(index + 1);
+      if (index % 3 === 2) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    setQualityAuditStatus("success");
   };
 
   const runLoopbackTest = () => {
@@ -453,6 +468,12 @@ export function ParticlePairLab() {
           <div className={`channel-suite ${channelStatus}`}>
             <div className="channel-suite-heading"><span>CAMERA CHANNEL LAB</span><strong>{selectedVisualMode.name}</strong><i>{channelStatus === "success" ? "6/6 PASS" : channelStatus === "error" ? `${Object.values(channelResults).filter((result) => result.ok).length}/6 PASS` : "NOT RUN"}</i></div>
             <div className="channel-profiles">{CAMERA_CHANNEL_PROFILES.map((profile) => { const result = channelResults[profile]; return <div key={profile} className={result ? result.ok ? "pass" : "fail" : ""}><span>{profile.replaceAll("-", " ")}</span><strong>{result ? `${result.quality}%` : "—"}</strong><small>{result ? result.ok ? `CRC · ${result.corrected} FIX` : "REJECTED" : "WAITING"}</small></div>; })}</div>
+          </div>
+          <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
+          <div className={`visual-audit ${qualityAuditStatus}`}>
+            <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG` : "PIXEL METRICS PENDING"}</strong></div>
+            <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · ${grade.grade}` : ""}`} className={grade ? grade.grade >= 70 ? "excellent" : grade.grade >= 55 ? "good" : "review" : ""} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}`}>{grade?.grade ?? "·"}</button>; })}</div>
+            {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
           </div>
         </article>
 
