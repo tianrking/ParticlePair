@@ -34,7 +34,7 @@ export function drawArtisticScene({ context, height, mode, pixelRatio, time, wid
       for (let step = 0; step <= 42; step += 1) {
         const x = cx - side * 0.48 + side * 0.96 * (step / 42);
         const y = cy + Math.sin(step * 0.34 + t * 0.55 + band) * side * (0.045 + band * 0.004) + (band - 4) * side * 0.035;
-        step ? context.lineTo(x, y) : context.moveTo(x, y);
+        if (step) context.lineTo(x, y); else context.moveTo(x, y);
       }
       context.strokeStyle = color([a, b, c][band % 3], 0.17);
       context.lineWidth = side * (0.026 - band * 0.0015);
@@ -64,7 +64,7 @@ export function drawArtisticScene({ context, height, mode, pixelRatio, time, wid
   } else if (mode.kind === "clouds") {
     for (let i = 0; i < 42; i += 1) { const angle = i * 2.39 + t * 0.035; const radius = side * (0.04 + (i % 9) * 0.045); const x = cx + Math.cos(angle) * radius; const y = cy + Math.sin(angle * 0.8) * radius; const gradient = context.createRadialGradient(x, y, 0, x, y, side * (0.035 + i % 5 * 0.012)); gradient.addColorStop(0, color([a, b, c][i % 3], 0.18)); gradient.addColorStop(1, color(c, 0)); context.fillStyle = gradient; context.fillRect(x - side * 0.09, y - side * 0.09, side * 0.18, side * 0.18); }
   } else if (mode.kind === "weave") {
-    for (let i = 0; i < 11; i += 1) { context.beginPath(); for (let s = 0; s <= 50; s += 1) { const x = cx - side * 0.46 + side * 0.92 * s / 50; const y = cy + (i - 5) * side * 0.052 + Math.sin(s * 0.28 + i + t * 0.18) * side * 0.052; s ? context.lineTo(x, y) : context.moveTo(x, y); } context.strokeStyle = color([a, b, c][i % 3], 0.24); context.lineWidth = pixelRatio * 2.4; context.stroke(); }
+    for (let i = 0; i < 11; i += 1) { context.beginPath(); for (let s = 0; s <= 50; s += 1) { const x = cx - side * 0.46 + side * 0.92 * s / 50; const y = cy + (i - 5) * side * 0.052 + Math.sin(s * 0.28 + i + t * 0.18) * side * 0.052; if (s) context.lineTo(x, y); else context.moveTo(x, y); } context.strokeStyle = color([a, b, c][i % 3], 0.24); context.lineWidth = pixelRatio * 2.4; context.stroke(); }
   } else if (mode.kind === "facets") {
     context.translate(cx, cy); context.rotate(t * 0.025);
     for (let ringIndex = 1; ringIndex <= 5; ringIndex += 1) for (let i = 0; i < 12; i += 1) { const r0 = side * ringIndex * 0.075; const r1 = r0 + side * 0.07; const p0 = i * Math.PI / 6; const p1 = p0 + Math.PI / 6; context.beginPath(); context.moveTo(Math.cos(p0) * r0, Math.sin(p0) * r0); context.lineTo(Math.cos(p0) * r1, Math.sin(p0) * r1); context.lineTo(Math.cos(p1) * r1, Math.sin(p1) * r1); context.closePath(); context.fillStyle = color([a, b, c][(i + ringIndex) % 3], 0.08 + ((i + ringIndex) % 3) * 0.035); context.fill(); }
