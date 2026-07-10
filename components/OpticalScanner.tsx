@@ -26,6 +26,7 @@ import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
 import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } from "../lib/frame-timing";
+import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
 
 interface OpticalScannerProps {
   language: Language;
@@ -50,6 +51,7 @@ const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
 const PERSPECTIVE_PATCH_SIZE = 36;
 const INITIAL_TIMING: FrameTimingSnapshot = { fps: 0, frameIntervalMs: 0, jitterMs: 0, pairToleranceMs: 120, state: "measuring" };
+const INITIAL_LOAD: ScanLoadSnapshot = { processingMs: 0, state: "normal", utilization: 0 };
 
 function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language: Language): string {
   switch (message.kind) {
@@ -149,6 +151,12 @@ function timedVideoCandidates(
   return { candidates, durationMs: performance.now() - started };
 }
 
+function timedFrameAnalyses(current: OpticalSampleFrame, reference: OpticalSampleFrame): { durationMs: number; ranked: ReturnType<typeof rankOpticalFrameAnalyses> } {
+  const started = performance.now();
+  const ranked = rankOpticalFrameAnalyses(current, reference);
+  return { durationMs: performance.now() - started, ranked };
+}
+
 export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const samplingCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -162,10 +170,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const v2DecoderRef = useRef(new V2FountainDecoder());
   const adaptiveSearchRef = useRef(new AdaptiveOpticalSearch());
   const timingRef = useRef(new FrameTimingEstimator());
+  const loadRef = useRef(new ScanLoadController());
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [telemetry, setTelemetry] = useState<{ candidates: number; durationMs: number; exposureGain: number; health: CameraCaptureHealth | null; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
+  const [telemetry, setTelemetry] = useState<{ candidates: number; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -192,7 +201,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     v2DecoderRef.current = new V2FountainDecoder();
     adaptiveSearchRef.current.reset();
     timingRef.current.reset();
-    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
+    loadRef.current.reset();
+    setTelemetry({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -245,14 +255,18 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     const canvas =
       samplingCanvasRef.current ?? document.createElement("canvas");
     samplingCanvasRef.current = canvas;
+    const timing = timingRef.current.observe(timestamp);
+    if (!loadRef.current.shouldProcess()) {
+      scheduleNextFrame();
+      return;
+    }
     const tier = adaptiveSearchRef.current.tier;
     const sampled = timedVideoCandidates(video, canvas, tier);
     const current: OpticalSampleFrame = {
       candidates: sampled.candidates,
       timestamp,
     };
-    const sampleDurationMs = sampled.durationMs;
-    const timing = timingRef.current.observe(timestamp);
+    let processingDurationMs = sampled.durationMs;
 
     const history = historyRef.current;
     const reference = selectPhaseReference(history, timestamp, PHASE_DURATION_MS, timing.pairToleranceMs);
@@ -263,7 +277,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     );
 
     if (reference) {
-      const ranked = rankOpticalFrameAnalyses(current, reference);
+      const rankedResult = timedFrameAnalyses(current, reference);
+      const ranked = rankedResult.ranked;
+      processingDurationMs += rankedResult.durationMs;
+      const load = loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
       const best = ranked[0];
       const score = best?.analysis.quality ?? 0;
       const percent = Math.round(score * 100);
@@ -273,9 +290,9 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         lastTelemetryRef.current = timestamp;
         setTelemetry({
           candidates: current.candidates.length,
-          durationMs: sampleDurationMs,
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
+          load,
           tier,
           timing,
         });
@@ -284,16 +301,16 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       const decision = adaptiveSearchRef.current.observe({
         bestKey: best?.key,
         quality: score,
-        sampleDurationMs,
+        sampleDurationMs: processingDurationMs,
       });
       if (decision.changed) {
         historyRef.current = [];
         evidenceRef.current.clear();
         setTelemetry({
           candidates: opticalSearchCandidateLabel(decision.tier),
-          durationMs: sampleDurationMs,
           exposureGain: best?.analysis.exposureGain ?? 1,
           health: best?.captureHealth ?? null,
+          load,
           tier: decision.tier,
           timing,
         });
@@ -388,6 +405,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
+      loadRef.current.observe(processingDurationMs, timing.frameIntervalMs);
       setMessage(timing.state === "jittery" ? { kind: "timing" } : { kind: "synchronizing" });
     }
 
@@ -426,8 +444,9 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       v2DecoderRef.current = new V2FountainDecoder();
       adaptiveSearchRef.current.reset();
       timingRef.current.reset();
+      loadRef.current.reset();
       lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire", timing: INITIAL_TIMING });
+      setTelemetry({ candidates: 61, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -452,11 +471,11 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"}`} aria-label="Scanner performance and dynamic range telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
           <span>GEO {telemetry.candidates}</span>
-          <span>{telemetry.timing.fps ? `${telemetry.durationMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
+          <span>{telemetry.timing.fps ? `${telemetry.load.processingMs.toFixed(1)}MS · ${telemetry.timing.fps}F` : "—MS · —F"}</span>
           <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
           <span className="health-pill">DR {telemetry.health ? Math.round(telemetry.health.score * 100) : "—"}</span>
           <span>CYAN Δ</span>
-          <span className={`timing-pill ${telemetry.timing.state}`}>J{telemetry.timing.state === "measuring" ? "—" : Math.round(telemetry.timing.jitterMs)}</span>
+          <span className={`timing-pill ${telemetry.timing.state} ${telemetry.load.state}`}>{telemetry.timing.state === "measuring" ? "J— · L—" : `J${Math.round(telemetry.timing.jitterMs)} · L${Math.round(telemetry.load.utilization * 100)}`}</span>
         </div>
         <div
           className="scan-quality"

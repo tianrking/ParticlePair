@@ -210,6 +210,8 @@ Cada candidato de perspectiva incluye además un registro de rango dinámico. Un
 
 El emparejamiento de fases usa un modelo móvil de 15 intervalos en lugar de una tolerancia fija. La mediana estima los FPS reales y la desviación absoluta mediana mide el jitter sin dejar que una pausa aislada domine. La ventana se reduce a 72 ms en cámaras rápidas y estables y solo se amplía hasta 145 ms con captura lenta o irregular, manteniendo separables las fases. `J` muestra el jitter en milisegundos; una cadencia inestable genera una indicación específica para mantener la página visible y desactivar el ahorro de batería.
 
+El tiempo mostrado ahora incluye muestreo geométrico, salud RGB, ocho transformaciones de orientación, ajuste de exposición y ranking de candidatos, no solo la lectura del Canvas. El controlador entra en enfriamiento tras cuatro fotogramas consecutivos fuera de presupuesto y procesa callbacks alternos, mientras el estimador temporal sigue observándolos todos. Ocho observaciones sostenidas de baja carga restauran la frecuencia completa. `L` informa utilización corregida por ciclo de trabajo para representar la presión media real de CPU.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1

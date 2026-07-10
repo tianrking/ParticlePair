@@ -210,6 +210,8 @@ Every perspective candidate also carries a dynamic-range health record. A cell i
 
 Frame pairing uses a rolling 15-interval timing model rather than a fixed tolerance. The median interval estimates real camera FPS and the median absolute deviation measures jitter without letting one suspended callback dominate. The opposite-phase window contracts to 72 ms on stable high-frame-rate cameras and expands only as far as 145 ms for slower or irregular capture, preserving phase separation. `J` exposes jitter in milliseconds; an unstable cadence produces a specific foreground/battery-saver hint.
 
+The displayed processing time now covers geometry sampling, RGB health analysis, eight-way orientation transforms, exposure fitting, and candidate ranking—not just canvas reads. A load controller enters cooling only after four consecutive over-budget frames, then processes alternate camera callbacks while the cadence estimator continues observing every callback. Eight sustained low-load observations restore full-rate processing. `L` reports duty-adjusted utilization, so cooling reflects actual average CPU pressure rather than the cost of one processed frame.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

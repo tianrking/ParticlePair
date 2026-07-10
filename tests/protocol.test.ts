@@ -27,6 +27,7 @@ import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainD
 import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, samplePerspectiveGridWithHealth, type PerspectiveQuad } from "../lib/perspective-sampling";
 import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adaptive-optical-search";
 import { FrameTimingEstimator, selectPhaseReference } from "../lib/frame-timing";
+import { ScanLoadController } from "../lib/scan-load";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -152,6 +153,23 @@ test("adaptive phase reference recovers low-fps opposite frames and rejects dist
   const history = [0, 167, 334].map((frameTimestamp) => ({ timestamp: frameTimestamp }));
   assert.equal(selectPhaseReference(history, 500, 300, 131)?.timestamp, 167);
   assert.equal(selectPhaseReference(history, 900, 300, 145), undefined);
+});
+
+test("scan load enters cooling with hysteresis, skips alternate frames, and recovers", () => {
+  const load = new ScanLoadController();
+  for (let frame = 0; frame < 3; frame += 1) assert.equal(load.observe(31, 33.3).state, "normal");
+  assert.equal(load.observe(31, 33.3).state, "cooling");
+  const decisions = Array.from({ length: 6 }, () => load.shouldProcess());
+  assert.deepEqual(decisions, [true, false, true, false, true, false]);
+  let snapshot = load.snapshot();
+  for (let frame = 0; frame < 30 && snapshot.state === "cooling"; frame += 1) snapshot = load.observe(7, 33.3);
+  assert.equal(snapshot.state, "normal"); assert.ok(snapshot.utilization < 0.48);
+});
+
+test("isolated scan cost spikes do not trigger thermal backpressure", () => {
+  const load = new ScanLoadController();
+  load.observe(8, 33.3); load.observe(55, 33.3); load.observe(8, 33.3); load.observe(8, 33.3);
+  assert.equal(load.snapshot().state, "normal");
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {
