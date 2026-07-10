@@ -26,6 +26,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "kaleidoscope", name: "Kaleidoscope", subtitle: "Symmetric optical facets", kind: "facets", colors: ["#ff42a1", "#7c4dff", "#23d5ff"], icon: "✧" },
   { id: "glyph", name: "Glyph Ritual", subtitle: "Concentric cipher rings", kind: "glyph", colors: ["#34f5c5", "#6d62ff", "#ff4ec7"], icon: "⌾" },
   { id: "city", name: "Citylight Code", subtitle: "Encrypted window glow", kind: "city", colors: ["#2356ff", "#7b3cff", "#ffd76a"], icon: "▥" },
+  { id: "ember", name: "Ember Transfer", subtitle: "Firelight data ascent", kind: "embers", colors: ["#ff3d00", "#ff8a00", "#ffe66d"], icon: "♨" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
