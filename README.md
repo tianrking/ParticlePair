@@ -165,10 +165,10 @@ Deployment is still governed by the repository license and does **not** grant co
 ## Two-device camera scan
 
 1. Open ParticlePair on the sender and keep the full particle cloud visible.
-2. Generate a secret and raise modulation strength to around 80% or higher.
+2. Generate a secret and keep modulation strength around 90% or higher.
 3. Open an HTTPS ParticlePair deployment on the camera-equipped receiver.
 4. Select **Start camera scanner** and grant camera permission.
-5. Align the complete sender cloud inside the receiver frame.
+5. Align the sender's four cyan optical corners with the square receiver guide. The surrounding rectangular watch frame is not part of the code.
 6. Keep distance, angle, and exposure stable while synchronization and CRC validation complete.
 
 `SYNC` is calibrated evidence above the random-correlation floor, not a generic camera activity meter. Unrelated scenes should remain at or near 0%; values above 30% are treated as synchronization candidates, and values at or above 47% can enter multi-frame decoding. The UI reports success only after the packet also passes Hamming decoding and CRC-16 validation.

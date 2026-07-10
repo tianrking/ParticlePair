@@ -26,7 +26,7 @@ function randomSecretHex(): string {
 export function ParticlePairLab() {
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
   const [secretHex, setSecretHex] = useState("");
-  const [strength, setStrength] = useState(0.72);
+  const [strength, setStrength] = useState(0.9);
   const [paused, setPaused] = useState(false);
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [testStatus, setTestStatus] = useState<"idle" | "running" | "success" | "error">("idle");
@@ -158,6 +158,7 @@ export function ParticlePairLab() {
           </div>
           <div className="watch-frame">
             <ParticleCloud canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused} />
+            <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
             <span className="broadcast-label"><i /> LIVE OPTICAL SIGNAL</span>
           </div>

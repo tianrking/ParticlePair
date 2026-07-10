@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  guideCropCandidates,
+  objectFitCoverSourceRectangle,
+} from "../lib/camera-geometry";
+import {
   CELL_COUNT,
   extractPayloadBits,
   isBorderCell,
@@ -14,9 +18,41 @@ import {
   transformOpticalSamples,
 } from "../lib/optical-decoder";
 import { rankOpticalFrameAnalyses } from "../lib/optical-search";
+import { pairedParticleMotionPhase } from "../lib/particle-renderer";
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("camera guide maps to the visible part of landscape and portrait streams", () => {
+  const landscape = objectFitCoverSourceRectangle(1920, 1080, 450, 300);
+  assert.deepEqual(landscape, {
+    height: 1080,
+    width: 1620,
+    x: 150,
+    y: 0,
+  });
+  assert.equal(guideCropCandidates(landscape)[10].side, 1080 * 0.76);
+
+  const portrait = objectFitCoverSourceRectangle(1080, 1920, 450, 300);
+  assert.deepEqual(portrait, {
+    height: 720,
+    width: 1080,
+    x: 0,
+    y: 600,
+  });
+  assert.equal(guideCropCandidates(portrait)[10].side, 720 * 0.76);
+});
+
+test("decorative particles repeat exactly across opposite optical phases", () => {
+  for (const timestamp of [0, 17.25, 137, 299.5, 12_345.67]) {
+    assert.ok(
+      Math.abs(
+        pairedParticleMotionPhase(timestamp) -
+          pairedParticleMotionPhase(timestamp + 300),
+      ) < 1e-10,
+    );
+  }
+});
 
 test("particle protocol survives a clean optical layout round trip", () => {
   const cells = layoutBits(encodeParticleCode(SECRET));

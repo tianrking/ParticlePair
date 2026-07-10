@@ -13,6 +13,10 @@ import {
   type OpticalSampleCandidate,
   type OpticalSampleFrame,
 } from "../lib/optical-search";
+import {
+  guideCropCandidates,
+  objectFitCoverSourceRectangle,
+} from "../lib/camera-geometry";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 
 interface OpticalScannerProps {
@@ -24,23 +28,11 @@ interface EvidenceBucket {
   lastTimestamp: number;
 }
 
-const CROP_RATIOS = [0.68, 0.76, 0.84] as const;
-const CROP_POSITIONS = [
-  [0, 0],
-  [-0.045, 0],
-  [0.045, 0],
-  [0, -0.045],
-  [0, 0.045],
-] as const;
 const HISTORY_DURATION_MS = 900;
 const PHASE_TOLERANCE_MS = 120;
 const MAX_ACCUMULATED_FRAMES = 5;
 const SIGNAL_QUALITY = 0.3;
 const DECODE_QUALITY = 0.47;
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
 
 function sampleVideoCandidates(
   video: HTMLVideoElement,
@@ -51,57 +43,46 @@ function sampleVideoCandidates(
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return [];
 
-  const baseSide = Math.min(video.videoWidth, video.videoHeight);
+  const visible = objectFitCoverSourceRectangle(
+    video.videoWidth,
+    video.videoHeight,
+    video.clientWidth || video.videoWidth,
+    video.clientHeight || video.videoHeight,
+  );
   const candidates: OpticalSampleCandidate[] = [];
 
-  for (const ratio of CROP_RATIOS) {
-    const sourceSide = baseSide * ratio;
-    for (const [offsetX, offsetY] of CROP_POSITIONS) {
-      const centerX = video.videoWidth / 2 + offsetX * baseSide;
-      const centerY = video.videoHeight / 2 + offsetY * baseSide;
-      const sourceX = clamp(
-        centerX - sourceSide / 2,
-        0,
-        video.videoWidth - sourceSide,
-      );
-      const sourceY = clamp(
-        centerY - sourceSide / 2,
-        0,
-        video.videoHeight - sourceSide,
-      );
+  for (const crop of guideCropCandidates(visible)) {
+    context.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
+    context.drawImage(
+      video,
+      crop.x,
+      crop.y,
+      crop.side,
+      crop.side,
+      0,
+      0,
+      GRID_SIZE,
+      GRID_SIZE,
+    );
 
-      context.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
-      context.drawImage(
-        video,
-        sourceX,
-        sourceY,
-        sourceSide,
-        sourceSide,
-        0,
-        0,
-        GRID_SIZE,
-        GRID_SIZE,
+    const pixels = context.getImageData(
+      0,
+      0,
+      GRID_SIZE,
+      GRID_SIZE,
+    ).data;
+    const values = Array.from({ length: CELL_COUNT }, (_, index) => {
+      const pixelOffset = index * 4;
+      return (
+        pixels[pixelOffset] * 0.2126 +
+        pixels[pixelOffset + 1] * 0.7152 +
+        pixels[pixelOffset + 2] * 0.0722
       );
-
-      const pixels = context.getImageData(
-        0,
-        0,
-        GRID_SIZE,
-        GRID_SIZE,
-      ).data;
-      const values = Array.from({ length: CELL_COUNT }, (_, index) => {
-        const pixelOffset = index * 4;
-        return (
-          pixels[pixelOffset] * 0.2126 +
-          pixels[pixelOffset + 1] * 0.7152 +
-          pixels[pixelOffset + 2] * 0.0722
-        );
-      });
-      candidates.push({
-        key: `${ratio}:${offsetX}:${offsetY}`,
-        values,
-      });
-    }
+    });
+    candidates.push({
+      key: crop.key,
+      values,
+    });
   }
 
   return candidates;

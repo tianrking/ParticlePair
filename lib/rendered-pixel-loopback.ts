@@ -26,7 +26,7 @@ function renderPhaseFrame(
   source: HTMLCanvasElement,
   cells: readonly boolean[],
   strength: number,
-  phase: boolean,
+  time: number,
 ): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, source.width);
@@ -38,12 +38,9 @@ function renderPhaseFrame(
     cells,
     context,
     height: canvas.height,
-    phase,
     pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
     strength,
-    // Both phases intentionally use the same particle time so the differential
-    // test measures the optical code rather than decorative particle motion.
-    time: 1200,
+    time,
     width: canvas.width,
   });
   return canvas;
@@ -162,10 +159,12 @@ export async function runRenderedPixelLoopback(
   expectedSecretHex: string,
 ): Promise<RenderedPixelLoopbackResult> {
   const reference = captureCanvasFrame(
-    renderPhaseFrame(canvas, cells, strength, false),
+    renderPhaseFrame(canvas, cells, strength, 1200),
   );
   const current = captureCanvasFrame(
-    renderPhaseFrame(canvas, cells, strength, true),
+    // This now exercises the same 300 ms separation as a physical camera. The
+    // decoration must cancel because its motion is phase-paired by the renderer.
+    renderPhaseFrame(canvas, cells, strength, 1500),
   );
   const { analysis, decoded } = decodeDifferentialFrames(
     current.values,
