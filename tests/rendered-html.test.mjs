@@ -32,6 +32,8 @@ test("server-renders the ParticlePair product shell", async () => {
   assert.match(html, /RUN CAMERA STRESS SUITE/);
   assert.match(html, /AUDIT ALL 50 VISUALS/);
   assert.match(html, /AUTO CALIBRATE/);
+  assert.match(html, /EXPORT LOCAL DIAGNOSTIC/);
+  assert.match(html, /aria-live="polite"/);
   assert.match(html, /Spiral Galaxy/);
   assert.match(html, /Quantum Foam/);
   assert.match(html, /aria-label="Language"/);

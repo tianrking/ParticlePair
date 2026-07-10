@@ -275,6 +275,8 @@ The live equation matrix shows active source blocks, XOR mask, sequence position
 
 ## Security model
 
+After optical recovery, both devices independently derive an 18-bit Short Authentication String from SHA-256 over a domain separator, the secret, and the v2 session ID. Users compare three words and a six-hex-digit fingerprint before accepting the peer. SAS comparison detects accidental or adversarial peer substitution only when a human actually compares both screens; it does not replace an authenticated key exchange.
+
 | Boundary | Current state |
 | --- | --- |
 | Secret material | 128 random bits from browser Web Crypto |
@@ -305,7 +307,7 @@ npm run build:vercel
 - No automatic screen color-space, camera white-balance, or refresh-rate calibration.
 - Camera color crosstalk can leak a small amount of the red/blue decorative galaxy into the green carrier channel.
 - Hamming correction is limited to one bit per codeword.
-- No timestamps, session binding, consumed-secret state, or replay prevention.
+- V1 remains a compatibility frame without expiry or replay state; V2 adds issued time, session binding, expiry, bounded replay state, and completed-session rejection.
 - Extreme rolling shutter, PWM, or exposure changes can still exceed the correction budget.
 - No backward-compatibility guarantee for the experimental protocol.
 - No public, reproducible cross-device success-rate dataset yet.
@@ -315,8 +317,8 @@ npm run build:vercel
 - [ ] Corner detection and perspective correction
 - [x] Rotation and mirror recovery
 - [ ] Screen/camera calibration workflow
-- [ ] Soft-decision decoding and stronger erasure coding
-- [ ] Timestamp, nonce, session binding, and replay state
+- [x] Quality-weighted soft-decision decoding and fountain erasure recovery
+- [x] Timestamp, session binding, expiry, bounded replay state, and human SAS
 - [ ] Native Android CameraX receiver
 - [ ] Reference BLE/Wi-Fi authenticated-handshake integration
 - [ ] Reproducible multi-device benchmark suite

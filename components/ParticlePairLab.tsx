@@ -31,6 +31,7 @@ import { VISUAL_CATEGORIES, VISUAL_MODES, visualMode as getVisualMode, type Visu
 import { analyzeVisualModeQuality, type VisualQualityMetrics } from "../lib/visual-quality";
 import { encodeV2Fragment, v2MaskForSequence, v2MinuteNow, v2SequenceAtTime } from "../lib/protocol-v2";
 import { derivePairingSas, type PairingSas } from "../lib/pairing-sas";
+import { buildDiagnosticReport } from "../lib/diagnostic-report";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -86,6 +87,9 @@ function pixelDetailText(detail: PixelDetail, copy: Copy): string {
 
 export function ParticlePairLab() {
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const immersiveLaunchRef = useRef<HTMLButtonElement>(null);
+  const immersiveCloseRef = useRef<HTMLButtonElement>(null);
+  const immersiveStageRef = useRef<HTMLElement>(null);
   const [language, setLanguage] = useState<Language>("en");
   const [secretHex, setSecretHex] = useState("");
   const [strength, setStrength] = useState(0.9);
@@ -178,11 +182,21 @@ export function ParticlePairLab() {
     if (!immersive) return;
     let wakeLock: WakeLockSentinel | null = null;
     let disposed = false;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersive(false); };
+    const launchButton = immersiveLaunchRef.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setImmersive(false); return; }
+      if (event.key !== "Tab") return;
+      const controls = [...(immersiveStageRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+      if (!controls.length) return;
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     document.body.classList.add("is-immersive");
     window.addEventListener("keydown", onKeyDown);
+    const focusFrame = window.requestAnimationFrame(() => immersiveCloseRef.current?.focus());
     navigator.wakeLock?.request("screen").then((sentinel) => { if (disposed) void sentinel.release(); else { wakeLock = sentinel; setWakeLockActive(true); sentinel.addEventListener("release", () => setWakeLockActive(false)); } }).catch(() => setWakeLockActive(false));
-    return () => { disposed = true; setWakeLockActive(false); void wakeLock?.release(); document.body.classList.remove("is-immersive"); window.removeEventListener("keydown", onKeyDown); };
+    return () => { disposed = true; window.cancelAnimationFrame(focusFrame); setWakeLockActive(false); void wakeLock?.release(); document.body.classList.remove("is-immersive"); window.removeEventListener("keydown", onKeyDown); launchButton?.focus(); };
   }, [immersive]);
 
   useEffect(() => {
@@ -365,6 +379,22 @@ export function ParticlePairLab() {
     setCalibrationFloor(floor); setStrength(Math.min(1, Number((floor + 0.08).toFixed(2)))); setCalibrationStatus("success");
   };
 
+  const exportDiagnosticReport = () => {
+    const graded = Object.values(visualGrades);
+    const report = buildDiagnosticReport({
+      createdAt: new Date().toISOString(),
+      transmitter: { modulationStrength: strength, protocolVersion: protocolMode, renderQuality, v2DwellMs: protocolMode === 2 ? v2Dwell : null, visualMode },
+      verification: {
+        cameraChannel: { results: channelResults, status: channelStatus }, canvasPixel: pixelTestStatus, fountainCanvas: v2Test,
+        modeMatrix: { failedModes: matrixFailures, progress: matrixProgress, status: matrixStatus },
+        visualAudit: { average: graded.length ? Math.round(graded.reduce((sum, grade) => sum + grade.grade, 0) / graded.length) : null, minimum: graded.length ? Math.min(...graded.map((grade) => grade.grade)) : null, modesMeasured: graded.length, status: qualityAuditStatus },
+      },
+      device: { deviceMemoryGiB: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null, hardwareConcurrency: navigator.hardwareConcurrency, pixelRatio: window.devicePixelRatio, viewport: { height: window.innerHeight, width: window.innerWidth } },
+    });
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: "application/json" }));
+    const anchor = document.createElement("a"); anchor.href = url; anchor.download = `particlepair-diagnostic-${Date.now()}.json`; anchor.hidden = true; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   const runLoopbackTest = () => {
     setTestStatus("running");
     setTestDetail({ kind: "running" });
@@ -466,7 +496,7 @@ export function ParticlePairLab() {
             <button type="button" aria-pressed={protocolMode === 2} className={protocolMode === 2 ? "is-active" : ""} onClick={() => setProtocolMode(2)}><span>V2</span><strong>FOUNTAIN STREAM</strong><small>Loss-tolerant · anti-replay</small></button>
             <div><span>SESSION</span><code>{v2SessionId.toString(16).padStart(8, "0")}</code><i>{protocolMode === 2 ? `EQ ${v2Sequence + 1}/15` : "READY"}</i></div>
           </div>
-          <div className={`v2-proof ${v2Test.status}`}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? "TESTING V2…" : "V2 CANVAS PROOF"}</button><div><span>FOUNTAIN RECOVERY</span><strong>{v2Test.detail}</strong></div></div>
+          <div className={`v2-proof ${v2Test.status}`} role="status" aria-live="polite" aria-busy={v2Test.status === "running"}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? "TESTING V2…" : "V2 CANVAS PROOF"}</button><div><span>FOUNTAIN RECOVERY</span><strong>{v2Test.detail}</strong></div></div>
           {protocolMode === 2 ? <div className="fountain-visualizer">
             <div className="fountain-heading"><span>LIVE EQUATION MATRIX</span><strong>{v2ActiveBlocks.map((active, index) => active ? `B${index}` : "").filter(Boolean).join(" ⊕ ")} → P</strong><i>TTL {Math.max(0, 10 - (v2MinuteNow() - v2IssuedMinute))} MIN</i></div>
             <div className="source-blocks">{v2ActiveBlocks.map((active, index) => <div key={index} className={active ? "is-active" : ""}><span>B{index}</span><i>{secretHex.slice(index * 8, index * 8 + 8) || "00000000"}</i></div>)}<b>⊕</b><div className="parity-block"><span>P</span><i>MASK {v2Mask.toString(2).padStart(4, "0")}</i></div></div>
@@ -485,7 +515,7 @@ export function ParticlePairLab() {
             <label><span>SEARCH MODES</span><input value={modeQuery} onChange={(event) => setModeQuery(event.target.value)} placeholder="Galaxy, organic, glyph…" /></label>
             <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP SHOWCASE" : "AUTO SHOWCASE"}</button>
           </div>
-          <button className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>IMMERSIVE TRANSMIT</strong><small>Distraction-free optical stage</small></button>
+          <button ref={immersiveLaunchRef} className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>IMMERSIVE TRANSMIT</strong><small>Distraction-free optical stage</small></button>
           <div className="mode-categories" aria-label="Mode categories">
             {VISUAL_CATEGORIES.map((category) => <button key={category} type="button" className={modeCategory === category ? "is-active" : ""} onClick={() => setModeCategory(category)}>{category}</button>)}
           </div>
@@ -514,7 +544,7 @@ export function ParticlePairLab() {
             />
             <output>{Math.round(strength * 100)}%</output>
           </div>
-          <div className={`adaptive-calibration ${calibrationStatus}`}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
+          <div className={`adaptive-calibration ${calibrationStatus}`} role="status" aria-live="polite" aria-busy={calibrationStatus === "running"}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
           <div className="render-budget" aria-label="Decorative render quality"><div><span>RENDER BUDGET</span><strong>Carrier always remains full resolution</strong></div>{(["efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
         </div>
       </section>
@@ -537,7 +567,7 @@ export function ParticlePairLab() {
             <button className="primary-button" type="button" onClick={regenerate}>{copy.generateSecret}</button>
             <button className="secondary-button" type="button" disabled={!validSecret} onClick={runLoopbackTest}>{copy.loopbackTest}</button>
           </div>
-          <div className={`test-result ${testStatus}`}>
+          <div className={`test-result ${testStatus}`} role="status" aria-live="polite" aria-busy={testStatus === "running"}>
             <span className="status-orb" />
             <div><strong>{linkStatusTitle}</strong><p>{loopDetailText(testDetail, copy)}</p></div>
           </div>
@@ -549,7 +579,7 @@ export function ParticlePairLab() {
           >
             {pixelTestStatus === "running" ? copy.pixelButtonRunning : copy.pixelButton}
           </button>
-          <div className={`pixel-test-result ${pixelTestStatus}`}>
+          <div className={`pixel-test-result ${pixelTestStatus}`} role="status" aria-live="polite" aria-busy={pixelTestStatus === "running"}>
             <div className="pixel-test-heading">
               <span className="status-orb" />
               <div><strong>{pixelStatusTitle}</strong><p>{pixelDetailText(pixelTestDetail, copy)}</p></div>
@@ -570,18 +600,19 @@ export function ParticlePairLab() {
           <button className="secondary-button full-width matrix-button" type="button" disabled={!validSecret || matrixStatus === "running" || paused} onClick={runModeMatrix}>
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
           </button>
-          <div className={`matrix-result ${matrixStatus}`}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
+          <div className={`matrix-result ${matrixStatus}`} role="status" aria-live="polite" aria-busy={matrixStatus === "running"}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
           <button className="secondary-button full-width channel-button" type="button" disabled={!validSecret || channelStatus === "running" || paused} onClick={runChannelSuite}>{channelStatus === "running" ? "SIMULATING CAMERA CHANNEL…" : "RUN CAMERA STRESS SUITE"}</button>
-          <div className={`channel-suite ${channelStatus}`}>
+          <div className={`channel-suite ${channelStatus}`} role="status" aria-live="polite" aria-busy={channelStatus === "running"}>
             <div className="channel-suite-heading"><span>CAMERA CHANNEL LAB</span><strong>{selectedVisualMode.name}</strong><i>{channelStatus === "success" ? "6/6 PASS" : channelStatus === "error" ? `${Object.values(channelResults).filter((result) => result.ok).length}/6 PASS` : "NOT RUN"}</i></div>
             <div className="channel-profiles">{CAMERA_CHANNEL_PROFILES.map((profile) => { const result = channelResults[profile]; return <div key={profile} className={result ? result.ok ? "pass" : "fail" : ""}><span>{profile.replaceAll("-", " ")}</span><strong>{result ? `${result.quality}%` : "—"}</strong><small>{result ? result.ok ? `CRC · ${result.corrected} FIX` : "REJECTED" : "WAITING"}</small></div>; })}</div>
           </div>
           <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
-          <div className={`visual-audit ${qualityAuditStatus}`}>
+          <div className={`visual-audit ${qualityAuditStatus}`} role="status" aria-live="polite" aria-busy={qualityAuditStatus === "running"}>
             <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG` : "PIXEL METRICS PENDING"}</strong></div>
             <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · ${grade.grade}` : ""}`} className={grade ? grade.grade >= 70 ? "excellent" : grade.grade >= 55 ? "good" : "review" : ""} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}`}>{grade?.grade ?? "·"}</button>; })}</div>
             {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
           </div>
+          <button className="diagnostic-export" type="button" onClick={exportDiagnosticReport}><span>↓</span><div><strong>EXPORT LOCAL DIAGNOSTIC</strong><small>Redacted JSON · no secret · no camera frames</small></div></button>
         </article>
 
         <article className="panel receiver-panel">
@@ -617,10 +648,10 @@ export function ParticlePairLab() {
 
       <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>ORBITACERO · PARTICLEPAIR · 2026</span></footer>
       {immersive ? (
-        <section className="immersive-stage" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties} role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
+        <section ref={immersiveStageRef} className="immersive-stage" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties} role="dialog" aria-modal="true" aria-label={`${selectedVisualMode.name} immersive optical transmitter`}>
           <ParticleCloud ariaLabel={`${selectedVisualMode.name} optical transmission`} cells={frame} strength={strength} mode={visualMode} renderQuality={renderQuality} />
           <div className="immersive-glass" aria-hidden="true" />
-          <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
+          <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button ref={immersiveCloseRef} type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
           <div className="immersive-meta"><span>{selectedVisualMode.category}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
           <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><div><span className="live-dot" />TRANSMITTING · PHASE 300 MS · CRC-16</div><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
           <div className="immersive-boundary" aria-hidden="true"><i /><i /><i /><i /></div>

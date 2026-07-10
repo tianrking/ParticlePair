@@ -22,6 +22,7 @@ import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical
 import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES } from "../lib/visual-modes";
 import { derivePairingSas } from "../lib/pairing-sas";
+import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
@@ -81,6 +82,12 @@ test("v2 dwell profiles align every usable pair to one fragment", () => {
 test("short authentication string is deterministic and session-bound", async () => {
   const first = await derivePairingSas(SECRET, 0x12345678); const second = await derivePairingSas(SECRET, 0x12345678); const other = await derivePairingSas(SECRET, 0x12345679);
   assert.deepEqual(first, second); assert.notDeepEqual(first, other); assert.match(first.code, /^[0-9A-F]{6}$/); assert.equal(first.words.length, 3);
+});
+
+test("diagnostic report is explicitly redacted", () => {
+  const report = buildDiagnosticReport({ createdAt: "2026-01-01T00:00:00.000Z", device: { deviceMemoryGiB: 8, hardwareConcurrency: 8, pixelRatio: 2, viewport: { height: 800, width: 1200 } }, transmitter: { modulationStrength: 0.8, protocolVersion: 2, renderQuality: "ultra", v2DwellMs: 900, visualMode: "galaxy" }, verification: { modeMatrix: "pass" } });
+  const serialized = JSON.stringify(report);
+  assert.equal(report.privacy.secretIncluded, false); assert.equal(report.privacy.sessionIdIncluded, false); assert.equal(report.privacy.cameraFramesIncluded, false); assert.doesNotMatch(serialized, /[0-9a-f]{32}/i);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {

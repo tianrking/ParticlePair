@@ -275,6 +275,8 @@ La matriz en vivo muestra bloques activos, máscara XOR, posición, TTL y rango 
 
 ## Modelo de seguridad
 
+Tras la recuperación óptica, ambos dispositivos derivan de forma independiente un Short Authentication String de 18 bits mediante SHA-256 sobre un separador de dominio, el secreto y el ID de sesión v2. El usuario debe comparar tres palabras y una huella hexadecimal de seis dígitos antes de aceptar el par. SAS solo detecta sustituciones si una persona compara realmente ambas pantallas; no sustituye un intercambio de claves autenticado.
+
 | Límite | Estado actual |
 | --- | --- |
 | Material secreto | 128 bits aleatorios generados con Web Crypto en el navegador |

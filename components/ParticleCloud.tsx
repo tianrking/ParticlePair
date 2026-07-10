@@ -21,6 +21,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   const strengthRef = useRef(strength);
   const modeRef = useRef(mode);
   const qualityRef = useRef(renderQuality);
+  const reduceMotionRef = useRef(false);
   const frozenTimeRef = useRef(0);
 
   useEffect(() => {
@@ -36,6 +37,12 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
   }, [mode]);
 
   useEffect(() => { qualityRef.current = renderQuality; }, [renderQuality]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => { reduceMotionRef.current = media.matches; }; update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -67,6 +74,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
         width,
         mode: modeRef.current,
         decorativeQuality: qualityRef.current === "ultra" ? 1 : qualityRef.current === "balanced" ? 0.72 : 0.46,
+        reduceDecorativeMotion: reduceMotionRef.current,
       });
 
       if (!paused) animationFrame = requestAnimationFrame(render);

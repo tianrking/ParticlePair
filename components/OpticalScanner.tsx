@@ -411,7 +411,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <span style={{ width: `${quality}%` }} />
         </div>
       </div>
-      <p className="scanner-message">{scannerMessageText(message, copy, language)}</p>
+      <p className="scanner-message" role="status" aria-live="polite">{scannerMessageText(message, copy, language)}</p>
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
         {running ? copy.stop : copy.start}
       </button>

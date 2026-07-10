@@ -72,6 +72,7 @@ export interface ParticleFrameOptions {
   width: number;
   mode?: VisualModeId;
   decorativeQuality?: number;
+  reduceDecorativeMotion?: boolean;
 }
 
 /** Render one complete optical frame. An explicit phase makes iOS diagnostics deterministic. */
@@ -86,6 +87,7 @@ export function renderParticleFrame({
   width,
   mode = "galaxy",
   decorativeQuality = 1,
+  reduceDecorativeMotion = false,
 }: ParticleFrameOptions): void {
   const selectedMode = visualMode(mode);
   const phase =
@@ -154,30 +156,31 @@ export function renderParticleFrame({
     );
   }
 
+  const decorativeTime = reduceDecorativeMotion ? 0 : time;
   if (selectedMode.kind !== "galaxy") {
-    drawArtisticScene({ context, height, mode: selectedMode, pixelRatio, time, width });
+    drawArtisticScene({ context, height, mode: selectedMode, pixelRatio, time: decorativeTime, width });
   }
 
-  const rotation = time * 0.000075;
+  const rotation = decorativeTime * 0.000075;
   const particleStep = decorativeQuality < 0.6 ? 3 : decorativeQuality < 0.85 ? 2 : 1;
   for (let particleIndex = 0; particleIndex < PARTICLES.length; particleIndex += particleStep) {
     if (selectedMode.kind !== "galaxy") break;
     const particle = PARTICLES[particleIndex];
     const wave =
-      Math.sin(time * 0.00028 + particle.angle * 2.6) *
+      Math.sin(decorativeTime * 0.00028 + particle.angle * 2.6) *
       (0.016 + (1 - particle.depth) * 0.018);
     const radius = (particle.radius + wave) * side * 0.45;
     const angle =
       particle.angle +
       rotation * (0.72 + particle.speed * 5.2) +
-      Math.sin(time * 0.0002 + particle.radius * 8) * 0.018;
+      Math.sin(decorativeTime * 0.0002 + particle.radius * 8) * 0.018;
     const perspective = 0.88 + particle.depth * 0.14;
     const x = centerX + Math.cos(angle) * radius * perspective;
     const y =
       centerY +
       Math.sin(angle) * radius * (0.56 + particle.depth * 0.2);
     const shimmer =
-      (0.52 + Math.sin(time * 0.00082 + particle.angle * 8.5) * 0.17) *
+      (0.52 + Math.sin(decorativeTime * 0.00082 + particle.angle * 8.5) * 0.17) *
       (0.62 + particle.depth * 0.48);
     const [red, green, blue] = selectedMode.id === "galaxy"
       ? particle.color
