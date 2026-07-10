@@ -307,6 +307,8 @@ The live equation matrix shows active source blocks, XOR mask, sequence position
 
 After optical recovery, both devices independently derive an 18-bit Short Authentication String from SHA-256 over a domain separator, the secret, and the v2 session ID. Users compare three words and a six-hex-digit fingerprint before accepting the peer. SAS comparison detects accidental or adversarial peer substitution only when a human actually compares both screens; it does not replace an authenticated key exchange.
 
+Verification Constellation makes that boundary explicit as a five-node ceremony: optical recovery, CRC, independent SAS derivation, physical-display comparison, and local acceptance. `WORDS MATCH` remains disabled until both local SAS values agree, a mismatch cannot be overridden, and `REJECT` produces a terminal warning. Acceptance is a local human-confirmation record only; production still continues with an authenticated key exchange.
+
 | Boundary | Current state |
 | --- | --- |
 | Secret material | 128 random bits from browser Web Crypto |

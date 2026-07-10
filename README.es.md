@@ -307,6 +307,8 @@ La matriz en vivo muestra bloques activos, máscara XOR, posición, TTL y rango 
 
 Tras la recuperación óptica, ambos dispositivos derivan de forma independiente un Short Authentication String de 18 bits mediante SHA-256 sobre un separador de dominio, el secreto y el ID de sesión v2. El usuario debe comparar tres palabras y una huella hexadecimal de seis dígitos antes de aceptar el par. SAS solo detecta sustituciones si una persona compara realmente ambas pantallas; no sustituye un intercambio de claves autenticado.
 
+Verification Constellation hace explícito ese límite mediante una ceremonia de cinco nodos: recuperación óptica, CRC, derivación SAS independiente, comparación de pantallas físicas y aceptación local. `WORDS MATCH` permanece desactivado hasta que ambos SAS locales coinciden, una discrepancia no puede ignorarse y `REJECT` genera una advertencia terminal. La aceptación solo registra la confirmación humana local; producción todavía debe continuar con un intercambio de claves autenticado.
+
 | Límite | Estado actual |
 | --- | --- |
 | Material secreto | 128 bits aleatorios generados con Web Crypto en el navegador |

@@ -34,6 +34,7 @@ import { derivePairingSas, type PairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { deriveVisualDna } from "../lib/visual-dna";
 import type { RenderPerformanceSnapshot, RenderQualitySetting } from "../lib/render-performance";
+import { pairingSasMatches, verificationCeremony, type VerificationDecision } from "../lib/verification-ceremony";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -123,6 +124,7 @@ export function ParticlePairLab() {
   const [result, setResult] = useState<DecodedParticleCode | null>(null);
   const [senderSas, setSenderSas] = useState<(PairingSas & { key: string }) | null>(null);
   const [receiverSas, setReceiverSas] = useState<(PairingSas & { key: string }) | null>(null);
+  const [verificationDecision, setVerificationDecision] = useState<VerificationDecision>("pending");
   const [testStatus, setTestStatus] = useState<TestStatus>("idle");
   const [testDetail, setTestDetail] = useState<LoopDetail>({ kind: "idle" });
   const [pixelTestStatus, setPixelTestStatus] = useState<TestStatus>("idle");
@@ -245,6 +247,7 @@ export function ParticlePairLab() {
     setSecretHex(randomSecretHex());
     setV2SessionId(randomSessionId()); setV2IssuedMinute(v2MinuteNow()); setV2Sequence(0);
     setResult(null);
+    setVerificationDecision("pending");
     setPixelResult(null);
     setPixelTestStatus("idle");
     setPixelTestDetail({ kind: "new-secret" });
@@ -252,10 +255,15 @@ export function ParticlePairLab() {
     setTestDetail({ kind: "new-secret" });
   };
 
+  const storeDecodedResult = (decoded: DecodedParticleCode) => { setVerificationDecision("pending"); setResult(decoded); };
+
   const validSecret = /^[0-9a-f]{32}$/i.test(secretHex);
   const v2Mask = v2MaskForSequence(v2Sequence);
   const v2ActiveBlocks = Array.from({ length: 4 }, (_, block) => (v2Mask & (1 << block)) !== 0);
   const selectedVisualMode = getVisualMode(visualMode);
+  const activeSenderSas = senderSas?.key === senderSasKey ? senderSas : null;
+  const activeReceiverSas = receiverSas?.key === receiverSasKey ? receiverSas : null;
+  const ceremony = verificationCeremony(Boolean(result), activeSenderSas, activeReceiverSas, verificationDecision);
   const filteredModes = VISUAL_MODES.filter((mode) => {
     const categoryMatches = modeCategory === "All" || mode.category === modeCategory;
     const query = modeQuery.trim().toLowerCase();
@@ -284,7 +292,7 @@ export function ParticlePairLab() {
     try {
       const decoded = await runRenderedPixelLoopback(canvas, validationFrame, strength, secretHex, visualMode);
       setPixelResult(decoded);
-      setResult({
+      storeDecodedResult({
         correctedCodewords: decoded.correctedCodewords,
         secret: hexToBytes(decoded.recoveredSecretHex),
         secretHex: decoded.recoveredSecretHex,
@@ -416,7 +424,7 @@ export function ParticlePairLab() {
         });
 
         const decoded = decodeParticleCode(extractPayloadBits(noisyCells));
-        setResult(decoded);
+        storeDecodedResult(decoded);
         setTestStatus("success");
         setTestDetail({ kind: "success", corrected: decoded.correctedCodewords });
       } catch {
@@ -507,7 +515,7 @@ export function ParticlePairLab() {
             <div className="dwell-selector" aria-label="Fountain fragment timing">{([{ value: 600, label: "FAST", detail: "600 ms" }, { value: 900, label: "BALANCED", detail: "900 ms" }, { value: 1200, label: "ROBUST", detail: "1200 ms" }] as const).map((option) => <button type="button" key={option.value} aria-pressed={v2Dwell === option.value} className={v2Dwell === option.value ? "is-active" : ""} onClick={() => setV2Dwell(option.value)}><strong>{option.label}</strong><small>{option.detail}</small></button>)}</div>
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
-          {senderSas?.key === senderSasKey ? <div className="sas-signature"><div><span>HUMAN AUTHENTICATION</span><strong>{senderSas.words.join(" · ")}</strong></div><code>{senderSas.code}</code><i>Compare on both devices</i></div> : null}
+          {activeSenderSas ? <div className="sas-signature"><div><span>HUMAN AUTHENTICATION</span><strong>{activeSenderSas.words.join(" · ")}</strong></div><code>{activeSenderSas.code}</code><i>Compare on both devices</i></div> : null}
           <div className="watch-frame">
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} renderQuality={renderQuality} onPerformance={setRenderPerformance} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
@@ -621,7 +629,7 @@ export function ParticlePairLab() {
 
         <article className="panel receiver-panel">
           <div className="panel-title"><span className="section-index">03</span><div><h2>{copy.receiveTitle}</h2><p>{copy.receiveDescription}</p></div></div>
-          <OpticalScanner language={language} onDecoded={setResult} />
+          <OpticalScanner language={language} onDecoded={storeDecodedResult} />
         </article>
 
         <article className="panel decoded-panel">
@@ -631,8 +639,15 @@ export function ParticlePairLab() {
               <span className="success-ring">✓</span>
               <p>{copy.validFrame}</p>
               <code>{result.secretHex.match(/.{1,8}/g)?.join(" ")}</code>
-              {receiverSas?.key === receiverSasKey ? <div className="receiver-sas"><span>COMPARE ON SENDER</span><strong>{receiverSas.words.join(" · ")}</strong><code>{receiverSas.code}</code></div> : null}
+              {activeReceiverSas ? <div className="receiver-sas"><span>COMPARE ON SENDER</span><strong>{activeReceiverSas.words.join(" · ")}</strong><code>{activeReceiverSas.code}</code></div> : null}
               <dl><div><dt>{copy.correctedCodewords}</dt><dd>{result.correctedCodewords}</dd></div><div><dt>{copy.integrity}</dt><dd>CRC-16 ✓</dd></div></dl>
+              <section className={`verification-ceremony state-${ceremony.state}`} aria-label={`Verification ceremony ${ceremony.state}`}>
+                <div className="ceremony-heading"><span>VERIFICATION CONSTELLATION</span><strong>{ceremony.state === "accepted" ? "PAIR ACCEPTED" : ceremony.state === "rejected" ? "PAIR REJECTED" : ceremony.state === "mismatch" ? "SAS MISMATCH" : ceremony.state === "deriving" ? "DERIVING SAS" : "HUMAN CHECK REQUIRED"}</strong></div>
+                <ol>{["OPTICAL", "CRC", "SAS", "COMPARE", "ACCEPT"].map((stage, index) => <li key={stage} className={ceremony.stages[index] ? "is-complete" : index === ceremony.stages.findIndex((complete) => !complete) ? "is-current" : undefined}><i /><span>{stage}</span></li>)}</ol>
+                <p>{ceremony.state === "accepted" ? "Human comparison recorded locally. Continue with an authenticated key exchange." : ceremony.state === "rejected" || ceremony.state === "mismatch" ? "Do not pair. Restart with the intended device and compare both displays again." : "Compare all three words and the six-digit fingerprint on both physical devices."}</p>
+                <div className="ceremony-actions"><button type="button" disabled={!ceremony.canAccept || verificationDecision !== "pending"} onClick={() => setVerificationDecision("accept")}>WORDS MATCH</button><button type="button" disabled={verificationDecision !== "pending"} onClick={() => setVerificationDecision("reject")}>REJECT</button></div>
+                <small>{pairingSasMatches(activeSenderSas, activeReceiverSas) ? "SAS values agree locally · human comparison is still mandatory" : "Waiting for independently derived SAS values"}</small>
+              </section>
             </div>
           ) : (
             <div className="empty-result"><span /><p>{copy.emptyResult}</p><small>{copy.emptyResultDetail}</small></div>

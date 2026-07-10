@@ -39,8 +39,25 @@ import { analyzePayloadConfidence } from "../lib/payload-confidence";
 import { deriveVisualDna } from "../lib/visual-dna";
 import { decorativeQualityFor, RenderPerformanceGovernor } from "../lib/render-performance";
 import { confidenceAurora } from "../lib/confidence-aurora";
+import { pairingSasMatches, verificationCeremony } from "../lib/verification-ceremony";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("verification ceremony requires matching SAS and an explicit human decision", () => {
+  const sas = { code: "A1B2C3", words: ["AURORA", "NOVA", "PRISM"] as const };
+  assert.equal(verificationCeremony(false, null, null, "pending").state, "waiting");
+  assert.equal(verificationCeremony(true, sas, null, "pending").state, "deriving");
+  const compare = verificationCeremony(true, sas, { ...sas }, "pending"); assert.equal(compare.state, "compare"); assert.equal(compare.canAccept, true); assert.deepEqual(compare.stages, [true, true, true, false, false]);
+  const accepted = verificationCeremony(true, sas, { ...sas }, "accept"); assert.equal(accepted.state, "accepted"); assert.deepEqual(accepted.stages, [true, true, true, true, true]);
+  assert.equal(verificationCeremony(true, sas, { ...sas }, "reject").state, "rejected");
+});
+
+test("verification ceremony blocks acceptance when any SAS symbol differs", () => {
+  const sender = { code: "A1B2C3", words: ["AURORA", "NOVA", "PRISM"] as const };
+  const receiver = { code: "A1B2C4", words: ["AURORA", "NOVA", "PRISM"] as const };
+  assert.equal(pairingSasMatches(sender, receiver), false);
+  const mismatch = verificationCeremony(true, sender, receiver, "accept"); assert.equal(mismatch.state, "mismatch"); assert.equal(mismatch.canAccept, false);
+});
 
 test("confidence aurora exposes the weakest independent scanner layer", () => {
   const snapshot = confidenceAurora({ captureHealth: 0.9, captureState: "healthy", complete: false, consensus: 0.88, consensusState: "stable", evidenceCount: 2, focus: 0.9, payloadCoverage: 0.42, running: true, sync: 81, timingState: "stable" });
