@@ -299,11 +299,11 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
 
   const start = async () => {
     if (!window.isSecureContext) {
-      setMessage("iOS摄像头需要HTTPS安全页面，请使用部署地址打开");
+      setMessage("摄像头需要HTTPS安全页面，请使用部署地址打开");
       return;
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      setMessage("当前浏览器不支持摄像头访问，请使用完整Safari打开");
+      setMessage("当前浏览器不支持摄像头访问，请升级Chrome、Safari、Edge或Firefox");
       return;
     }
 
@@ -331,7 +331,7 @@ export function OpticalScanner({ onDecoded }: OpticalScannerProps) {
       setMessage("正在搜索位置、比例与方向…");
       scheduleNextFrame();
     } catch {
-      setMessage("无法打开摄像头，请在Safari设置中允许相机权限");
+      setMessage("无法打开摄像头，请在浏览器与系统设置中允许相机权限");
     }
   };
 

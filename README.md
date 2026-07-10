@@ -107,6 +107,13 @@ A person mainly sees particles rotating, breathing, gathering, and dispersing. T
 - npm
 - A modern browser with Canvas, Web Crypto, and `getUserMedia()` support
 
+### Browser compatibility
+
+- The sender works in current Chrome, Edge, Firefox, and Safari on desktop or mobile when Canvas 2D and Web Crypto are available.
+- The camera receiver additionally requires an HTTPS secure context and `getUserMedia()` permission. iPhone Chrome and Safari, Android Chrome, and current desktop browsers are supported through feature detection rather than browser-name checks.
+- The scanner uses `requestVideoFrameCallback()` when available and automatically falls back to `requestAnimationFrame()` when it is not.
+- Use the full browser app instead of an in-app browser, and keep the tab in the foreground while scanning.
+
 ```bash
 git clone https://github.com/tianrking/ParticlePair.git
 cd ParticlePair
