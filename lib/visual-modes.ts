@@ -17,6 +17,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "galaxy", name: "Spiral Galaxy", subtitle: "Differential starlight", kind: "galaxy", colors: ["#3012ff", "#9d08ff", "#ff0aa6"], icon: "✦" },
   { id: "aurora", name: "Aurora Veil", subtitle: "Luminous curtains", kind: "curtain", colors: ["#24ffd1", "#42a5ff", "#b76cff"], icon: "≈" },
   { id: "ripple", name: "Ripple Code", subtitle: "Radial wavefronts", kind: "rings", colors: ["#24d9ff", "#5078ff", "#d56dff"], icon: "◎" },
+  { id: "bloom", name: "Bloom Cipher", subtitle: "Living petal matrix", kind: "petals", colors: ["#ff4fc8", "#a86cff", "#40e6ff"], icon: "✿" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
