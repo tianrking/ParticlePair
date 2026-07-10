@@ -4,7 +4,7 @@
   "private": true,
   "description": "Source-available optical pairing that encodes a one-time secret into an animated particle cloud.",
   "license": "SEE LICENSE IN LICENSE",
-  "author": "tianrking",
+  "author": "OrbitaCero",
   "homepage": "https://github.com/tianrking/ParticlePair#readme",
   "repository": {
     "type": "git",

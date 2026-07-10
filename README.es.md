@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./public/favicon.png" width="88" alt="Marca de ParticlePair" />
   <h1>ParticlePair</h1>
-  <p><strong>Emparejamiento oculto en movimiento.</strong></p>
+  <p><strong>Emparejamiento oculto en movimiento.</strong><br /><sub>Un proyecto de OrbitaCero.</sub></p>
   <p>Una galaxia giratoria y luminosa para las personas. Una trama óptica verificable para las cámaras.</p>
 
   <p>
@@ -11,6 +11,7 @@
   </p>
 
   <p>
+    <img alt="Organización: OrbitaCero" src="https://img.shields.io/badge/organization-OrbitaCero-0F172A?style=flat-square" />
     <a href="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
     <a href="#limitaciones-conocidas"><img alt="Estado: experimental" src="https://img.shields.io/badge/estado-experimental-EA580C?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="Código disponible" src="https://img.shields.io/badge/código-disponible-7C3AED?style=flat-square" /></a>

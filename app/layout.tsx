@@ -15,6 +15,8 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "ParticlePair",
     description: "A source-available noncommercial optical pairing lab built around an animated particle galaxy.",
+    creator: "OrbitaCero",
+    publisher: "OrbitaCero",
     icons: { icon: "/favicon.png", shortcut: "/favicon.png" },
     openGraph: {
       title: "ParticlePair — Pairing, hidden in motion",

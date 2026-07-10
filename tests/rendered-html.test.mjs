@@ -31,6 +31,8 @@ test("server-renders the ParticlePair product shell", async () => {
   assert.match(html, /scan-quality-label/);
   assert.match(html, /SYNC/);
   assert.match(html, /Hamming\(12,8\)/);
+  assert.match(html, /ORBITACERO · PARTICLEPAIR · 2026/);
+  assert.doesNotMatch(html, /POLYFORM NONCOMMERCIAL 1\.0\.0/);
   assert.doesNotMatch(html, /value="[0-9a-f]{32}"/);
   assert.doesNotMatch(html, /react-loading-skeleton/);
 });

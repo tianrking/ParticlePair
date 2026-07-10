@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./public/favicon.png" width="88" alt="ParticlePair mark" />
   <h1>ParticlePair</h1>
-  <p><strong>Pairing, hidden in motion.</strong></p>
+  <p><strong>Pairing, hidden in motion.</strong><br /><sub>An OrbitaCero project.</sub></p>
   <p>A vivid rotating galaxy for people. A verifiable optical frame for cameras.</p>
 
   <p>
@@ -11,6 +11,7 @@
   </p>
 
   <p>
+    <img alt="Organization: OrbitaCero" src="https://img.shields.io/badge/organization-OrbitaCero-0F172A?style=flat-square" />
     <a href="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
     <a href="#known-limitations"><img alt="Status: experimental" src="https://img.shields.io/badge/status-experimental-EA580C?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="Source available" src="https://img.shields.io/badge/source-available-7C3AED?style=flat-square" /></a>

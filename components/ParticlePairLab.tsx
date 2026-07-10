@@ -371,7 +371,7 @@ export function ParticlePairLab() {
         <p className="security-note">{copy.securityNote}</p>
       </section>
 
-      <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>POLYFORM NONCOMMERCIAL 1.0.0 · © 2026 TIANRKING</span></footer>
+      <footer><span>PARTICLEPAIR / {copy.footerTagline}</span><span>ORBITACERO · PARTICLEPAIR · 2026</span></footer>
     </main>
   );
 }

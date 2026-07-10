@@ -1,7 +1,7 @@
 <div align="center">
   <img src="./public/favicon.png" width="88" alt="ParticlePair 标志" />
   <h1>ParticlePair</h1>
-  <p><strong>让配对，隐入流动。</strong></p>
+  <p><strong>让配对，隐入流动。</strong><br /><sub>OrbitaCero 出品。</sub></p>
   <p>人眼看到鲜亮的旋转星系，相机读出可验证的光学帧。</p>
 
   <p>
@@ -11,6 +11,7 @@
   </p>
 
   <p>
+    <img alt="组织：OrbitaCero" src="https://img.shields.io/badge/organization-OrbitaCero-0F172A?style=flat-square" />
     <a href="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/tianrking/ParticlePair/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
     <a href="#已知限制"><img alt="状态：实验性" src="https://img.shields.io/badge/status-experimental-EA580C?style=flat-square" /></a>
     <a href="./LICENSE"><img alt="源码可用" src="https://img.shields.io/badge/source-available-7C3AED?style=flat-square" /></a>
