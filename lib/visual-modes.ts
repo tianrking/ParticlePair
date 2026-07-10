@@ -19,6 +19,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "ripple", name: "Ripple Code", subtitle: "Radial wavefronts", kind: "rings", colors: ["#24d9ff", "#5078ff", "#d56dff"], icon: "◎" },
   { id: "bloom", name: "Bloom Cipher", subtitle: "Living petal matrix", kind: "petals", colors: ["#ff4fc8", "#a86cff", "#40e6ff"], icon: "✿" },
   { id: "orbit", name: "Orbital Handshake", subtitle: "Celestial rendezvous", kind: "orbits", colors: ["#54e7ff", "#7c6cff", "#ffb45c"], icon: "◉" },
+  { id: "constellation", name: "Constellation Key", subtitle: "Connected anchor stars", kind: "nodes", colors: ["#ffffff", "#77d8ff", "#a98cff"], icon: "⌁" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
