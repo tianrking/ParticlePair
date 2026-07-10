@@ -31,6 +31,7 @@ import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/cand
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { tuneCameraTrack, type CameraTuningResult } from "../lib/camera-tuning";
 import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth, type CaptureResolutionProfile } from "../lib/resolution-governor";
+import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 
 interface OpticalScannerProps {
   language: Language;
@@ -38,6 +39,7 @@ interface OpticalScannerProps {
 }
 
 interface EvidenceBucket {
+  diversity: EvidenceDiversityGate;
   frames: { differences: number[]; quality: number }[];
   lastTimestamp: number;
 }
@@ -194,6 +196,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const [cameraTuning, setCameraTuning] = useState<CameraTuningResult>(INITIAL_TUNING);
   const [captureProfile, setCaptureProfile] = useState<CaptureResolutionProfile | null>(null);
   const [quality, setQuality] = useState(0);
+  const [evidenceCount, setEvidenceCount] = useState(0);
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
@@ -221,6 +224,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     consensusRef.current.reset();
     lastTelemetryRef.current = 0;
     setQuality(0);
+    setEvidenceCount(0);
     setTelemetry({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   };
 
@@ -351,6 +355,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       return;
     }
     const tier = adaptiveSearchRef.current.tier;
+    const mediaTimeSeconds = video.currentTime;
     const sampled = timedVideoCandidates(video, canvas, tier);
     const current: OpticalSampleFrame = {
       candidates: sampled.candidates,
@@ -399,6 +404,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       if (decision.changed) {
         historyRef.current = [];
         evidenceRef.current.clear();
+        setEvidenceCount(0);
         setTelemetry({
           candidates: opticalSearchCandidateLabel(decision.tier),
           consensus,
@@ -431,9 +437,12 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
 
           const evidenceKey = `${candidate.key}:${candidate.transform}`;
           const bucket = evidenceRef.current.get(evidenceKey) ?? {
+            diversity: new EvidenceDiversityGate(),
             frames: [],
             lastTimestamp: timestamp,
           };
+          const diversity = bucket.diversity.observe({ callbackTimeMs: timestamp, frameIntervalMs: timing.frameIntervalMs, mediaTimeSeconds });
+          if (!diversity.accepted) continue;
           const oriented = candidate.analysis.differences.map(
             (difference) => difference * candidate.analysis.orientation,
           );
@@ -444,6 +453,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           }
           evidenceRef.current.set(evidenceKey, bucket);
           accumulatedFrames = Math.max(accumulatedFrames, bucket.frames.length);
+          setEvidenceCount(Math.min(3, accumulatedFrames));
 
           const canAttemptDecode =
             candidate.analysis.quality >= DECODE_QUALITY &&
@@ -500,6 +510,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         }
       } else {
         consensusRef.current.observe([]);
+        setEvidenceCount(0);
         const healthState = best?.captureHealth?.state;
         setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : best?.captureHealth?.focusState === "soft" ? { kind: "softfocus" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
@@ -577,6 +588,10 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
+        <div className="evidence-meter" aria-label={`${evidenceCount} of 3 independent evidence frames`}>
+          <span>EVIDENCE</span>
+          {[0, 1, 2].map((index) => <i key={index} className={index < evidenceCount ? "is-active" : undefined} />)}
+        </div>
         <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"} focus-${telemetry.health?.focusState ?? "unknown"}`} aria-label="Scanner performance, dynamic range, and focus telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
           <span className={captureProfile === "eco" ? "resolution-eco" : undefined}>GEO{telemetry.candidates}·{captureProfile?.toUpperCase() ?? "—"}</span>

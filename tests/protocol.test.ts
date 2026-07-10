@@ -32,6 +32,7 @@ import { CandidateConsensus } from "../lib/candidate-consensus";
 import { CameraLifecycle, canResumeCameraTrack } from "../lib/camera-lifecycle";
 import { cameraConstraintPlan, tuneCameraTrack } from "../lib/camera-tuning";
 import { ResolutionGovernor, resolutionConstraints, resolutionProfileFromWidth } from "../lib/resolution-governor";
+import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -257,6 +258,21 @@ test("resolution targets clamp to camera ranges and reflect actual settings", ()
   assert.deepEqual(eco, { width: { ideal: 800 }, height: { ideal: 480 } });
   assert.deepEqual(hd, { width: { ideal: 1000 }, height: { ideal: 600 } });
   assert.equal(resolutionProfileFromWidth(1280), "hd"); assert.equal(resolutionProfileFromWidth(960), "eco");
+});
+
+test("evidence diversity rejects repeated source frames despite new callbacks", () => {
+  const gate = new EvidenceDiversityGate();
+  assert.deepEqual(gate.observe({ callbackTimeMs: 0, frameIntervalMs: 33, mediaTimeSeconds: 1 }), { accepted: true, reason: "independent" });
+  assert.deepEqual(gate.observe({ callbackTimeMs: 20, frameIntervalMs: 33, mediaTimeSeconds: 1 }), { accepted: false, reason: "duplicate-source" });
+  assert.deepEqual(gate.observe({ callbackTimeMs: 34, frameIntervalMs: 33, mediaTimeSeconds: 1.034 }), { accepted: true, reason: "independent" });
+});
+
+test("evidence diversity falls back to cadence spacing and resets cleanly", () => {
+  const gate = new EvidenceDiversityGate();
+  assert.equal(gate.observe({ callbackTimeMs: 0, frameIntervalMs: 100, mediaTimeSeconds: 0 }).accepted, true);
+  assert.deepEqual(gate.observe({ callbackTimeMs: 54, frameIntervalMs: 100, mediaTimeSeconds: 0 }), { accepted: false, reason: "too-close" });
+  assert.equal(gate.observe({ callbackTimeMs: 55, frameIntervalMs: 100, mediaTimeSeconds: 0 }).accepted, true);
+  gate.reset(); assert.equal(gate.observe({ callbackTimeMs: 1, frameIntervalMs: 100, mediaTimeSeconds: 0 }).accepted, true);
 });
 
 test("cyan carrier is separated from vivid galaxy colors", () => {
