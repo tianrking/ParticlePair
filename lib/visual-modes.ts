@@ -20,6 +20,7 @@ export const VISUAL_MODES: readonly VisualMode[] = [
   { id: "bloom", name: "Bloom Cipher", subtitle: "Living petal matrix", kind: "petals", colors: ["#ff4fc8", "#a86cff", "#40e6ff"], icon: "✿" },
   { id: "orbit", name: "Orbital Handshake", subtitle: "Celestial rendezvous", kind: "orbits", colors: ["#54e7ff", "#7c6cff", "#ffb45c"], icon: "◉" },
   { id: "constellation", name: "Constellation Key", subtitle: "Connected anchor stars", kind: "nodes", colors: ["#ffffff", "#77d8ff", "#a98cff"], icon: "⌁" },
+  { id: "jellyfish", name: "Bioluminescent", subtitle: "Jellyfish pulse paths", kind: "tendrils", colors: ["#42fff3", "#557dff", "#dc61ff"], icon: "♆" },
 ];
 
 export function visualMode(id: VisualModeId): VisualMode {
