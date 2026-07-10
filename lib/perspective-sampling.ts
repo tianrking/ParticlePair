@@ -2,6 +2,13 @@ export interface Point2D { x: number; y: number }
 export interface PerspectiveQuad { bottomLeft: Point2D; bottomRight: Point2D; topLeft: Point2D; topRight: Point2D }
 export interface NamedPerspectiveQuad { key: string; quad: PerspectiveQuad }
 export type PerspectiveSearchTier = "acquire" | "track" | "lock";
+export interface CameraCaptureHealth {
+  clippedRatio: number;
+  darkRatio: number;
+  opponentSpan: number;
+  score: number;
+  state: "healthy" | "clipped" | "dark" | "flat";
+}
 
 interface Homography { a: number; b: number; c: number; d: number; e: number; f: number; g: number; h: number }
 
@@ -28,17 +35,29 @@ function bilinearChannel(data: Uint8ClampedArray, width: number, height: number,
   return (at(x0, y0) * (1 - fx) + at(x1, y0) * fx) * (1 - fy) + (at(x0, y1) * (1 - fx) + at(x1, y1) * fx) * fy;
 }
 
-export function samplePerspectiveGrid(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number): number[] {
+export function samplePerspectiveGridWithHealth(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number): { health: CameraCaptureHealth; values: number[] } {
   if (data.length !== width * height * 4) throw new Error("RGBA buffer dimensions do not match");
-  return Array.from({ length: gridSize * gridSize }, (_, index) => {
+  let clipped = 0; let dark = 0;
+  const values = Array.from({ length: gridSize * gridSize }, (_, index) => {
     const row = Math.floor(index / gridSize); const column = index % gridSize;
     const point = projectUnitPoint(quad, (column + 0.5) / gridSize, (row + 0.5) / gridSize);
-    return opticalPixelValue(
-      bilinearChannel(data, width, height, point.x, point.y, 0),
-      bilinearChannel(data, width, height, point.x, point.y, 1),
-      bilinearChannel(data, width, height, point.x, point.y, 2),
-    );
+    const red = bilinearChannel(data, width, height, point.x, point.y, 0);
+    const green = bilinearChannel(data, width, height, point.x, point.y, 1);
+    const blue = bilinearChannel(data, width, height, point.x, point.y, 2);
+    if ([red, green, blue].filter((channel) => channel >= 250).length >= 2) clipped += 1;
+    if (Math.max(red, green, blue) <= 10) dark += 1;
+    return opticalPixelValue(red, green, blue);
   });
+  const sorted = [...values].sort((left, right) => left - right);
+  const opponentSpan = sorted[Math.floor(sorted.length * 0.9)] - sorted[Math.floor(sorted.length * 0.1)];
+  const clippedRatio = clipped / values.length; const darkRatio = dark / values.length;
+  const score = Math.max(0, Math.min(1, 1 - clippedRatio * 2.4 - Math.max(0, darkRatio - 0.35) * 1.4 - Math.max(0, 28 - opponentSpan) / 28));
+  const state: CameraCaptureHealth["state"] = clippedRatio > 0.16 ? "clipped" : darkRatio > 0.58 ? "dark" : opponentSpan < 22 ? "flat" : "healthy";
+  return { health: { clippedRatio, darkRatio, opponentSpan, score, state }, values };
+}
+
+export function samplePerspectiveGrid(data: Uint8ClampedArray, width: number, height: number, quad: PerspectiveQuad, gridSize: number): number[] {
+  return samplePerspectiveGridWithHealth(data, width, height, quad, gridSize).values;
 }
 
 export function keystoneQuadCandidates(size: number): NamedPerspectiveQuad[] {

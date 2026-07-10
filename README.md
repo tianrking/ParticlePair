@@ -206,6 +206,8 @@ The receiver starts with 61 crop/perspective geometries. A hysteresis controller
 
 Camera RGB is projected into an amplitude-preserving cyan opponent channel, `G - 0.42R - 0.16B`, so vivid blue, violet, and magenta artwork is rejected without normalizing away the optical pulse. For each opposite-phase pair, the known border estimates multiplicative auto-exposure gain from the bright/dim group separation; the decoder then removes that gain and the additive black-level shift before synchronization, Hamming correction, and CRC validation. The live `AE ×` value makes this compensation observable.
 
+Every perspective candidate also carries a dynamic-range health record. A cell is considered clipped only when at least two RGB channels reach the sensor ceiling, avoiding false warnings from the intentionally green-heavy cyan carrier. The 10th-to-90th percentile opponent-channel span distinguishes a useful signal from a flat frame, while the all-channel shadow ratio detects underexposure. `DR` reports the combined health score; when synchronization is weak, the receiver turns that evidence into specific brightness, distance, or backlight guidance instead of reporting generic noise.
+
 Display refresh rate, PWM, rolling shutter, auto exposure, and browser throttling can all affect the optical link. This is a runnable research prototype, not a promise of calibration-free interoperability.
 
 ## Particle Code v1

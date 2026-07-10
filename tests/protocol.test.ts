@@ -24,7 +24,7 @@ import { VISUAL_MODES } from "../lib/visual-modes";
 import { derivePairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { decodeV2Fragment, encodeV2Fragment, v2PairUsesSameFragment, V2FountainDecoder } from "../lib/protocol-v2";
-import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, type PerspectiveQuad } from "../lib/perspective-sampling";
+import { perspectiveCandidatesForCrop, projectUnitPoint, samplePerspectiveGrid, samplePerspectiveGridWithHealth, type PerspectiveQuad } from "../lib/perspective-sampling";
 import { AdaptiveOpticalSearch, opticalSearchCandidateLabel } from "../lib/adaptive-optical-search";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
@@ -197,6 +197,19 @@ test("cyan opponent projection rejects white-balance contamination without erasi
   assert.ok(brightCarrier - dimCarrier > 100);
   assert.ok(brightCarrier > blueNebula * 4);
   assert.ok(brightCarrier > magentaNebula * 4);
+});
+
+test("capture health separates useful range from clipping, darkness, and flat frames", () => {
+  const size = 36; const quad: PerspectiveQuad = { topLeft: { x: 0, y: 0 }, topRight: { x: 35, y: 0 }, bottomRight: { x: 35, y: 35 }, bottomLeft: { x: 0, y: 35 } };
+  const solid = (red: number, green: number, blue: number) => { const data = new Uint8ClampedArray(size * size * 4); for (let index = 0; index < size * size; index += 1) { data[index * 4] = red; data[index * 4 + 1] = green; data[index * 4 + 2] = blue; data[index * 4 + 3] = 255; } return data; };
+  const healthyPixels = solid(18, 68, 58); for (let row = 0; row < size / 2; row += 1) for (let column = 0; column < size; column += 1) { const offset = (row * size + column) * 4; healthyPixels[offset] = 42; healthyPixels[offset + 1] = 210; healthyPixels[offset + 2] = 178; }
+  const healthy = samplePerspectiveGridWithHealth(healthyPixels, size, size, quad, 18).health;
+  const clipped = samplePerspectiveGridWithHealth(solid(255, 255, 255), size, size, quad, 18).health;
+  const dark = samplePerspectiveGridWithHealth(solid(2, 3, 4), size, size, quad, 18).health;
+  const flat = samplePerspectiveGridWithHealth(solid(80, 92, 88), size, size, quad, 18).health;
+  assert.equal(healthy.state, "healthy"); assert.ok(healthy.score > 0.9);
+  assert.equal(clipped.state, "clipped"); assert.equal(clipped.score, 0);
+  assert.equal(dark.state, "dark"); assert.equal(flat.state, "flat");
 });
 
 test("chance-level border matches are removed from scanner confidence", () => {

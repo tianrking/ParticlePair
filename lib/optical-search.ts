@@ -6,8 +6,10 @@ import {
   type OpticalTransform,
 } from "./optical-decoder";
 import { CELL_COUNT } from "./optical-layout";
+import type { CameraCaptureHealth } from "./perspective-sampling";
 
 export interface OpticalSampleCandidate {
+  captureHealth?: CameraCaptureHealth;
   key: string;
   values: number[];
 }
@@ -19,6 +21,7 @@ export interface OpticalSampleFrame {
 
 export interface RankedFrameAnalysis {
   analysis: DifferentialFrameAnalysis;
+  captureHealth?: CameraCaptureHealth;
   key: string;
   transform: OpticalTransform;
 }
@@ -41,7 +44,7 @@ export function rankOpticalFrameAnalyses(
       const canonicalCurrent = transformOpticalSamples(currentCandidate.values, transform);
       const canonicalReference = transformOpticalSamples(referenceCandidate.values, transform);
       const analysis = analyzeDifferentialFrames(canonicalCurrent, canonicalReference);
-      matches.push({ analysis, key: currentCandidate.key, transform });
+      matches.push({ analysis, captureHealth: currentCandidate.captureHealth, key: currentCandidate.key, transform });
     }
   }
 

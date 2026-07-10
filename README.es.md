@@ -206,6 +206,8 @@ El receptor comienza con 61 geometrías de recorte y perspectiva. Un controlador
 
 El RGB de la cámara se proyecta en un canal oponente cian que conserva amplitud, `G - 0.42R - 0.16B`, para rechazar el arte azul, violeta y magenta sin eliminar el pulso óptico. En cada par de fases, la separación claro/oscuro del borde conocido estima la ganancia multiplicativa de exposición automática; después se eliminan esa ganancia y el desplazamiento aditivo de negro antes de sincronizar, corregir con Hamming y validar el CRC. El valor `AE ×` hace visible la compensación en tiempo real.
 
+Cada candidato de perspectiva incluye además un registro de rango dinámico. Un punto solo se considera saturado cuando al menos dos canales RGB alcanzan el límite del sensor, evitando falsas alarmas por el portador cian deliberadamente verde. El rango percentil 10–90 del canal oponente distingue señal útil de una imagen plana y la proporción de sombras en los tres canales detecta subexposición. `DR` muestra la salud combinada; con sincronía débil, el receptor convierte estas pruebas en indicaciones concretas sobre brillo, distancia o contraluz en lugar de mostrar ruido genérico.
+
 La frecuencia de actualización de la pantalla, PWM, el obturador rodante, la exposición automática y la limitación de tareas en segundo plano del navegador pueden afectar al enlace óptico. Es un prototipo de investigación funcional, no una promesa de interoperabilidad sin calibración.
 
 ## Particle Code v1

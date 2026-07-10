@@ -16,7 +16,7 @@ import {
   guideCropCandidates,
   objectFitCoverSourceRectangle,
 } from "../lib/camera-geometry";
-import { perspectiveCandidatesForCrop, samplePerspectiveGrid } from "../lib/perspective-sampling";
+import { perspectiveCandidatesForCrop, samplePerspectiveGridWithHealth, type CameraCaptureHealth } from "../lib/perspective-sampling";
 import {
   AdaptiveOpticalSearch,
   opticalSearchCandidateLabel,
@@ -37,7 +37,7 @@ interface EvidenceBucket {
 }
 
 type ScannerMessage =
-  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" }
+  | { kind: "align" | "stopped" | "none" | "synchronizing" | "insecure" | "unsupported" | "searching" | "permission" | "overexposed" | "underexposed" }
   | { kind: "success"; corrected: number; percent: number }
   | { kind: "boundary"; frames: number; percent: number }
   | { kind: "fountain"; rank: number; percent: number }
@@ -80,6 +80,10 @@ function scannerMessageText(message: ScannerMessage, copy: ScannerCopy, language
       return copy.searching;
     case "permission":
       return copy.permission;
+    case "overexposed":
+      return language === "zh" ? "画面高光溢出 · 请降低屏幕亮度或稍微拉远" : language === "es" ? "Altas luces saturadas · reduce el brillo o aumenta la distancia" : "Highlights clipped · lower screen brightness or move slightly farther away";
+    case "underexposed":
+      return language === "zh" ? "有效动态范围不足 · 请避开强背光并保持屏幕完整入框" : language === "es" ? "Rango dinámico insuficiente · evita el contraluz y encuadra toda la pantalla" : "Dynamic range too low · avoid backlight and keep the full screen in frame";
     default:
       return copy.align;
   }
@@ -123,10 +127,10 @@ function sampleVideoCandidates(
       PERSPECTIVE_PATCH_SIZE,
       PERSPECTIVE_PATCH_SIZE,
     ).data;
-    for (const perspective of perspectiveCandidatesForCrop(crop.key, PERSPECTIVE_PATCH_SIZE, tier)) candidates.push({
-      key: `${crop.key}:${perspective.key}`,
-      values: samplePerspectiveGrid(pixels, PERSPECTIVE_PATCH_SIZE, PERSPECTIVE_PATCH_SIZE, perspective.quad, GRID_SIZE),
-    });
+    for (const perspective of perspectiveCandidatesForCrop(crop.key, PERSPECTIVE_PATCH_SIZE, tier)) {
+      const sampled = samplePerspectiveGridWithHealth(pixels, PERSPECTIVE_PATCH_SIZE, PERSPECTIVE_PATCH_SIZE, perspective.quad, GRID_SIZE);
+      candidates.push({ captureHealth: sampled.health, key: `${crop.key}:${perspective.key}`, values: sampled.values });
+    }
   }
 
   return candidates;
@@ -157,7 +161,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
   const [quality, setQuality] = useState(0);
-  const [telemetry, setTelemetry] = useState({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" as OpticalSearchTier });
+  const [telemetry, setTelemetry] = useState<{ candidates: number; durationMs: number; exposureGain: number; health: CameraCaptureHealth | null; tier: OpticalSearchTier }>({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
 
@@ -183,7 +187,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     evidenceRef.current.clear();
     v2DecoderRef.current = new V2FountainDecoder();
     adaptiveSearchRef.current.reset();
-    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" });
+    setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
     setRunning(false);
     setQuality(0);
     setMessage({ kind: "stopped" });
@@ -277,6 +281,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           candidates: current.candidates.length,
           durationMs: sampleDurationMs,
           exposureGain: best?.analysis.exposureGain ?? 1,
+          health: best?.captureHealth ?? null,
           tier,
         });
       }
@@ -293,6 +298,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           candidates: opticalSearchCandidateLabel(decision.tier),
           durationMs: sampleDurationMs,
           exposureGain: best?.analysis.exposureGain ?? 1,
+          health: best?.captureHealth ?? null,
           tier: decision.tier,
         });
       }
@@ -382,7 +388,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           setMessage({ kind: "candidate", percent });
         }
       } else {
-        setMessage(percent === 0 ? { kind: "none" } : { kind: "noise", percent });
+        const healthState = best?.captureHealth?.state;
+        setMessage(healthState === "clipped" ? { kind: "overexposed" } : healthState === "dark" || healthState === "flat" ? { kind: "underexposed" } : percent === 0 ? { kind: "none" } : { kind: "noise", percent });
       }
     } else {
       setMessage({ kind: "synchronizing" });
@@ -423,7 +430,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       v2DecoderRef.current = new V2FountainDecoder();
       adaptiveSearchRef.current.reset();
       lastTelemetryRef.current = 0;
-      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, tier: "acquire" });
+      setTelemetry({ candidates: 61, durationMs: 0, exposureGain: 1, health: null, tier: "acquire" });
       runningRef.current = true;
       setRunning(true);
       setMessage({ kind: "searching" });
@@ -445,11 +452,12 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
           <i /><i /><i /><i />
         </div>
         <span className="scan-quality-label">SYNC {quality}%</span>
-        <div className="scanner-telemetry" aria-label="Scanner performance telemetry">
+        <div className={`scanner-telemetry health-${telemetry.health?.state ?? "idle"}`} aria-label="Scanner performance and dynamic range telemetry">
           <span>{telemetry.tier.toUpperCase()}</span>
-          <span>{telemetry.candidates} GEOMETRIES</span>
+          <span>GEO {telemetry.candidates}</span>
           <span>{telemetry.durationMs.toFixed(1)} MS</span>
           <span>AE ×{telemetry.exposureGain.toFixed(2)}</span>
+          <span className="health-pill">DR {telemetry.health ? Math.round(telemetry.health.score * 100) : "—"}</span>
           <span>CYAN Δ</span>
         </div>
         <div
