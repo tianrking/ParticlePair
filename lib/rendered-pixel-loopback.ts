@@ -24,6 +24,8 @@ export interface RenderedPixelLoopbackResult {
   referenceImage: string;
 }
 
+export interface RenderedPixelAssessment { correctedCodewords: number; matchesExpected: boolean; quality: number; recoveredSecretHex: string }
+
 export type CameraChannelProfile = "clean" | "low-light" | "exposure-drift" | "defocus" | "sensor-noise" | "partial-occlusion";
 export const CAMERA_CHANNEL_PROFILES: readonly CameraChannelProfile[] = ["clean", "low-light", "exposure-drift", "defocus", "sensor-noise", "partial-occlusion"];
 
@@ -57,7 +59,7 @@ function renderPhaseFrame(
   return canvas;
 }
 
-function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
+function sampleCanvasValues(source: HTMLCanvasElement): number[] {
   const sourceSide = Math.min(source.width, source.height);
   const sourceX = (source.width - sourceSide) / 2;
   const sourceY = (source.height - sourceSide) / 2;
@@ -87,7 +89,7 @@ function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
     GRID_SIZE,
     GRID_SIZE,
   ).data;
-  const values = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
+  return Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, index) => {
     const offset = index * 4;
     return opticalPixelValue(
       pixels[offset],
@@ -95,6 +97,13 @@ function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
       pixels[offset + 2],
     );
   });
+}
+
+function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
+  const sourceSide = Math.min(source.width, source.height);
+  const sourceX = (source.width - sourceSide) / 2;
+  const sourceY = (source.height - sourceSide) / 2;
+  const values = sampleCanvasValues(source);
 
   const preview = document.createElement("canvas");
   preview.width = PREVIEW_SIZE;
@@ -114,6 +123,15 @@ function captureCanvasFrame(source: HTMLCanvasElement): CapturedCanvasFrame {
   );
 
   return { preview, values };
+}
+
+/** Same real-pixel path as the evidence loopback, without PNG preview encoding. */
+export async function runRenderedPixelAssessment(canvas: HTMLCanvasElement, cells: readonly boolean[], strength: number, expectedSecretHex: string, mode: VisualModeId = "galaxy", profile: CameraChannelProfile = "clean"): Promise<RenderedPixelAssessment> {
+  let reference = sampleCanvasValues(applyCameraChannel(renderPhaseFrame(canvas, cells, strength, 1200, mode), profile, 0));
+  let current = sampleCanvasValues(applyCameraChannel(renderPhaseFrame(canvas, cells, strength, 1500, mode), profile, 1));
+  reference = applySampleChannel(reference, profile, 0); current = applySampleChannel(current, profile, 1);
+  const { analysis, decoded } = decodeDifferentialFrames(current, reference);
+  return { correctedCodewords: decoded.correctedCodewords, matchesExpected: decoded.secretHex === expectedSecretHex.toLowerCase(), quality: analysis.quality, recoveredSecretHex: decoded.secretHex };
 }
 
 function applyCameraChannel(source: HTMLCanvasElement, profile: CameraChannelProfile, phase: 0 | 1): HTMLCanvasElement {

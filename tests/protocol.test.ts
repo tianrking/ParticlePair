@@ -20,7 +20,7 @@ import {
   transformOpticalSamples,
 } from "../lib/optical-decoder";
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
-import { decodeParticleCode, encodeParticleCode } from "../lib/protocol";
+import { bytesToHex, decodeParticleCode, encodeParticleCode } from "../lib/protocol";
 import { VISUAL_MODES, visualModeVariant } from "../lib/visual-modes";
 import { scoreVisualDistinctness, visualAuditPasses, type VisualQualityMetrics } from "../lib/visual-quality";
 import { derivePairingSas } from "../lib/pairing-sas";
@@ -44,8 +44,17 @@ import { decodeStudioPreset, encodeStudioPreset, studioPresetId, studioPresetUrl
 import { rankModeChannelObservations } from "../lib/mode-oracle";
 import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { receiverGuidance } from "../lib/receiver-guidance";
+import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {
+  const first = reliabilitySecretCorpus(); const second = reliabilitySecretCorpus(); assert.equal(first.length, 8); assert.deepEqual(first, second); assert.equal(new Set(first.map((secret) => bytesToHex(secret))).size, 8); assert.ok(first.every((secret) => secret.length === 16));
+});
+
+test("reliability marathon summary reports exact pass rate and worst quality", () => {
+  assert.deepEqual(summarizeReliability([{ passed: true, quality: 0.91 }, { passed: false, quality: 0.38 }, { passed: true, quality: 0.72 }]), { minimumQuality: 0.38, passed: 2, rate: 2 / 3, total: 3 }); assert.deepEqual(summarizeReliability([]), { minimumQuality: 0, passed: 0, rate: 0, total: 0 });
+});
 
 test("immersive receiver guidance prioritizes physical occlusion", () => {
   const base = { bottleneck: "sync" as const, metrics: { capture: 0.8, sync: 0.2, geometry: 0.7, evidence: 0.5, payload: 0.6 }, score: 52, state: "aligning" as const };
