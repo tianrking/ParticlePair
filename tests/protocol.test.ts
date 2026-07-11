@@ -45,7 +45,7 @@ import { rankModeChannelObservations } from "../lib/mode-oracle";
 import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { receiverGuidance } from "../lib/receiver-guidance";
 import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
-import { buildReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
+import { buildReliabilityEvidence, inspectReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -57,6 +57,22 @@ test("reliability evidence seal is deterministic and detects result tampering", 
 test("reliability evidence is explicitly redacted and refuses partial runs", async () => {
   const cells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.9 })); const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const serialized = JSON.stringify(evidence);
   assert.deepEqual(evidence.privacy, { cameraFramesIncluded: false, sasIncluded: false, secretIncluded: false, sessionIdIncluded: false }); assert.ok(!serialized.includes("secretHex")); assert.ok(!serialized.includes("00112233445566778899AABBCCDDEEFF")); assert.ok(!serialized.includes("ABCD-EFGH")); assert.equal(evidence.seal.trust, "integrity-only-not-attestation"); await assert.rejects(() => buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells.slice(0, 399)));
+});
+
+test("reliability evidence inspector distinguishes verified, tampered, and invalid files", async () => {
+  const cells = Array.from({ length: 400 }, (_, index) => ({ passed: index !== 17, quality: index === 17 ? 0.42 : 0.88 }));
+  const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells);
+  const verified = await inspectReliabilityEvidence(evidence);
+  assert.equal(verified.status, "verified");
+  const tampered = { ...structuredClone(evidence), results: [...evidence.results] };
+  tampered.results[0] = { passed: false, quality: 0.1 };
+  assert.equal((await inspectReliabilityEvidence(tampered)).status, "tampered");
+  const digestTampered = structuredClone(evidence); digestTampered.seal.digest = "0".repeat(64);
+  assert.equal((await inspectReliabilityEvidence(digestTampered)).status, "tampered");
+  assert.equal((await inspectReliabilityEvidence({ ...evidence, privacy: { ...evidence.privacy, secretIncluded: true } })).status, "invalid");
+  assert.equal((await inspectReliabilityEvidence({ ...evidence, unexpected: true })).status, "invalid");
+  assert.equal((await inspectReliabilityEvidence({ ...evidence, createdAt: "2026-07-11" })).status, "invalid");
+  assert.equal((await inspectReliabilityEvidence(null)).status, "invalid");
 });
 
 test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {
