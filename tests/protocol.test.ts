@@ -45,8 +45,19 @@ import { rankModeChannelObservations } from "../lib/mode-oracle";
 import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { receiverGuidance } from "../lib/receiver-guidance";
 import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
+import { buildReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("reliability evidence seal is deterministic and detects result tampering", async () => {
+  const cells = Array.from({ length: 400 }, (_, index) => ({ passed: true, quality: 0.7 + (index % 7) * 0.01 })); const first = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const second = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells);
+  assert.equal(first.seal.digest, second.seal.digest); assert.equal(await verifyReliabilityEvidence(first), true); const tampered = { ...structuredClone(first), results: [...first.results] }; tampered.results[0] = { passed: false, quality: 0 }; assert.equal(await verifyReliabilityEvidence(tampered), false);
+});
+
+test("reliability evidence is explicitly redacted and refuses partial runs", async () => {
+  const cells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.9 })); const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const serialized = JSON.stringify(evidence);
+  assert.deepEqual(evidence.privacy, { cameraFramesIncluded: false, sasIncluded: false, secretIncluded: false, sessionIdIncluded: false }); assert.ok(!serialized.includes("secretHex")); assert.ok(!serialized.includes("00112233445566778899AABBCCDDEEFF")); assert.ok(!serialized.includes("ABCD-EFGH")); assert.equal(evidence.seal.trust, "integrity-only-not-attestation"); await assert.rejects(() => buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells.slice(0, 399)));
+});
 
 test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {
   const first = reliabilitySecretCorpus(); const second = reliabilitySecretCorpus(); assert.equal(first.length, 8); assert.deepEqual(first, second); assert.equal(new Set(first.map((secret) => bytesToHex(secret))).size, 8); assert.ok(first.every((secret) => secret.length === 16));

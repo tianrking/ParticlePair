@@ -41,6 +41,7 @@ import { decodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset 
 import { rankModeChannelObservations, type RankedModeChannelObservation } from "../lib/mode-oracle";
 import { phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { reliabilitySecretCorpus, summarizeReliability, type ReliabilityCell } from "../lib/reliability-marathon";
+import { buildReliabilityEvidence, type ReliabilityEvidence } from "../lib/reliability-evidence";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -120,6 +121,7 @@ export function ParticlePairLab() {
   const [marathonStatus, setMarathonStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [marathonProgress, setMarathonProgress] = useState(0);
   const [marathonCells, setMarathonCells] = useState<ReliabilityCell[]>([]);
+  const [marathonEvidence, setMarathonEvidence] = useState<ReliabilityEvidence | null>(null);
   const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
   const [oracleProfile, setOracleProfile] = useState<CameraChannelProfile>("low-light");
@@ -380,7 +382,7 @@ export function ParticlePairLab() {
 
   const runReliabilityMarathon = async () => {
     const canvas = particleCanvasRef.current; if (!canvas) return;
-    setMarathonStatus("running"); setMarathonProgress(0); setMarathonCells([]); setAutoShowcase(false);
+    setMarathonStatus("running"); setMarathonProgress(0); setMarathonCells([]); setMarathonEvidence(null); setAutoShowcase(false);
     const cells: ReliabilityCell[] = [];
     for (let secretIndex = 0; secretIndex < RELIABILITY_CORPUS.length; secretIndex += 1) {
       const corpusSecret = RELIABILITY_CORPUS[secretIndex]; const corpusHex = bytesToHex(corpusSecret); const corpusFrame = layoutBits(encodeParticleCode(corpusSecret));
@@ -390,7 +392,11 @@ export function ParticlePairLab() {
         const progress = cells.length; setMarathonProgress(progress); if (progress % 10 === 0) setMarathonCells([...cells]); if (progress % 8 === 0) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
       }
     }
-    setMarathonCells(cells); setMarathonStatus(cells.every((cell) => cell.passed) ? "success" : "error");
+    const evidence = await buildReliabilityEvidence(new Date().toISOString(), strength, cells); setMarathonCells(cells); setMarathonEvidence(evidence); setMarathonStatus(cells.every((cell) => cell.passed) ? "success" : "error");
+  };
+
+  const exportReliabilityEvidence = () => {
+    if (!marathonEvidence) return; const url = URL.createObjectURL(new Blob([JSON.stringify(marathonEvidence, null, 2)], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `particlepair-reliability-${marathonEvidence.seal.digest.slice(0, 12)}.json`; anchor.hidden = true; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const runChannelSuite = async () => {
@@ -459,7 +465,7 @@ export function ParticlePairLab() {
       transmitter: { modulationStrength: strength, protocolVersion: protocolMode, renderQuality, v2DwellMs: protocolMode === 2 ? v2Dwell : null, visualMode },
       verification: {
         cameraChannel: { results: channelResults, status: channelStatus }, canvasPixel: pixelTestStatus, fountainCanvas: v2Test,
-        modeMatrix: { failedModes: matrixFailures, progress: matrixProgress, status: matrixStatus },
+        modeMatrix: { failedModes: matrixFailures, progress: matrixProgress, status: matrixStatus }, reliabilityEvidence: marathonEvidence ? { cases: marathonEvidence.summary.total, passed: marathonEvidence.summary.passed, seal: marathonEvidence.seal.digest, trust: marathonEvidence.seal.trust } : null,
         visualAudit: { average: graded.length ? Math.round(graded.reduce((sum, grade) => sum + grade.grade, 0) / graded.length) : null, minimum: graded.length ? Math.min(...graded.map((grade) => grade.grade)) : null, modesMeasured: graded.length, status: qualityAuditStatus },
       },
       device: { deviceMemoryGiB: (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? null, hardwareConcurrency: navigator.hardwareConcurrency, pixelRatio: window.devicePixelRatio, viewport: { height: window.innerHeight, width: window.innerWidth } },
@@ -679,7 +685,7 @@ export function ParticlePairLab() {
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
           </button>
           <div className={`matrix-result ${matrixStatus}`} role="status" aria-live="polite" aria-busy={matrixStatus === "running"}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
-          <div className={`reliability-marathon ${marathonStatus}`} role="status" aria-live="polite" aria-busy={marathonStatus === "running"}><div className="marathon-heading"><span>RELIABILITY MARATHON</span><strong>{marathonStatus === "running" ? `${marathonProgress}/400` : marathonCells.length ? `${marathonSummary.passed}/${marathonSummary.total} · ${Math.round(marathonSummary.minimumQuality * 100)}% FLOOR` : "8 SECRETS × 50 MODES"}</strong></div><button type="button" disabled={marathonStatus === "running" || paused} onClick={runReliabilityMarathon}>{marathonStatus === "running" ? "RUNNING DETERMINISTIC CORPUS…" : "RUN 400-CASE MARATHON"}</button>{marathonCells.length ? <div className="marathon-map" aria-label={`${marathonSummary.passed} of ${marathonSummary.total} marathon cases passed`}>{RELIABILITY_CORPUS.map((_, row) => <div key={row}><b>S{row + 1}</b>{VISUAL_MODES.map((mode, column) => { const cell = marathonCells[row * 50 + column]; return <i key={mode.id} className={cell ? cell.passed ? "pass" : "fail" : undefined} title={`${mode.name} · secret ${row + 1}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "PASS" : "FAIL"}` : " · pending"}`} />; })}</div>)}</div> : <p>Fixed corpus · real pixels · exact secret · Hamming · CRC</p>}</div>
+          <div className={`reliability-marathon ${marathonStatus}`} role="status" aria-live="polite" aria-busy={marathonStatus === "running"}><div className="marathon-heading"><span>RELIABILITY MARATHON</span><strong>{marathonStatus === "running" ? `${marathonProgress}/400` : marathonCells.length ? `${marathonSummary.passed}/${marathonSummary.total} · ${Math.round(marathonSummary.minimumQuality * 100)}% FLOOR` : "8 SECRETS × 50 MODES"}</strong></div><button type="button" disabled={marathonStatus === "running" || paused} onClick={runReliabilityMarathon}>{marathonStatus === "running" ? "RUNNING DETERMINISTIC CORPUS…" : "RUN 400-CASE MARATHON"}</button>{marathonCells.length ? <div className="marathon-map" aria-label={`${marathonSummary.passed} of ${marathonSummary.total} marathon cases passed`}>{RELIABILITY_CORPUS.map((_, row) => <div key={row}><b>S{row + 1}</b>{VISUAL_MODES.map((mode, column) => { const cell = marathonCells[row * 50 + column]; return <i key={mode.id} className={cell ? cell.passed ? "pass" : "fail" : undefined} title={`${mode.name} · secret ${row + 1}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "PASS" : "FAIL"}` : " · pending"}`} />; })}</div>)}</div> : <p>Fixed corpus · real pixels · exact secret · Hamming · CRC</p>}{marathonEvidence ? <div className="evidence-seal"><span>SHA-256 EVIDENCE SEAL</span><code>{marathonEvidence.seal.digest.slice(0, 12)}</code><small>Integrity only · not a signature or remote attestation</small><button type="button" onClick={exportReliabilityEvidence}>EXPORT SEALED JSON</button></div> : null}</div>
           </section>
           <section className="lab-module" hidden={labTool !== "camera"} aria-label="Camera channel laboratory">
           <button className="secondary-button full-width channel-button" type="button" disabled={!validSecret || channelStatus === "running" || paused} onClick={runChannelSuite}>{channelStatus === "running" ? "SIMULATING CAMERA CHANNEL…" : "RUN CAMERA STRESS SUITE"}</button>
