@@ -602,13 +602,15 @@ export function ParticlePairLab() {
 
       <section className="hero" id="top">
         <div className="hero-copy" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
-          <p className="eyebrow">{copy.eyebrow}</p>
-          <h1>{copy.heroLineOne}<br /><em>{copy.heroLineTwo}</em></h1>
-          <p className="lede">{copy.heroDescription}</p>
-          <div className="hero-metrics">
-            <div><strong>128</strong><span>{copy.metricSecret}</span></div>
-            <div><strong>300</strong><span>{copy.metricPhase}</span></div>
-            <div><strong>CRC</strong><span>CCITT</span></div>
+          <div className="hero-intro">
+            <p className="eyebrow">{copy.eyebrow}</p>
+            <h1>{copy.heroLineOne}<br /><em>{copy.heroLineTwo}</em></h1>
+            <p className="lede">{copy.heroDescription}</p>
+            <div className="hero-metrics">
+              <div><strong>128</strong><span>{copy.metricSecret}</span></div>
+              <div><strong>300</strong><span>{copy.metricPhase}</span></div>
+              <div><strong>CRC</strong><span>CCITT</span></div>
+            </div>
           </div>
           <aside className="mission-control" aria-label={missionCopy.live}>
             <div className="mission-live"><span><i />{missionCopy.live}</span><strong>{selectedVisualMode.name}</strong><small>{selectedVisualMode.category} · {selectedVisualMode.subtitle}</small><div>{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
