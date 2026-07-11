@@ -42,8 +42,19 @@ import { confidenceAurora } from "../lib/confidence-aurora";
 import { pairingSasMatches, verificationCeremony } from "../lib/verification-ceremony";
 import { decodeStudioPreset, encodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
 import { rankModeChannelObservations } from "../lib/mode-oracle";
+import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("optical chronograph follows exact A and B phase boundaries", () => {
+  assert.deepEqual(opticalPhaseSnapshot(0), { phase: "A", progress: 0, remainingMs: 300 });
+  assert.equal(opticalPhaseSnapshot(299).phase, "A"); assert.equal(opticalPhaseSnapshot(300).phase, "B"); assert.equal(opticalPhaseSnapshot(600).phase, "A");
+  const middle = opticalPhaseSnapshot(450); assert.equal(middle.phase, "B"); assert.equal(middle.progress, 0.5); assert.equal(middle.remainingMs, 150);
+});
+
+test("showcase scheduling lands only on complete dual-phase boundaries", () => {
+  for (const now of [0, 17, 299, 300, 599, 1234.5]) { const delay = phaseSafeShowcaseDelay(now); const target = now + delay; assert.ok(delay >= 4200 && delay <= 4800); assert.ok(Math.abs(target % 600) < 0.0001 || Math.abs(target % 600 - 600) < 0.0001); }
+});
 
 test("environment oracle ranks exact CRC recovery before quality and repair count", () => {
   const ranked = rankModeChannelObservations([

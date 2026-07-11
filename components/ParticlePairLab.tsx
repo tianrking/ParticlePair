@@ -4,6 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ParticleCloud } from "./ParticleCloud";
+import { PhaseChronograph } from "./PhaseChronograph";
 import { OpticalScanner } from "./OpticalScanner";
 import { extractPayloadBits, isBorderCell, layoutBits } from "../lib/optical-layout";
 import {
@@ -37,6 +38,7 @@ import type { RenderPerformanceSnapshot, RenderQualitySetting } from "../lib/ren
 import { pairingSasMatches, verificationCeremony, type VerificationDecision } from "../lib/verification-ceremony";
 import { decodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
 import { rankModeChannelObservations, type RankedModeChannelObservation } from "../lib/mode-oracle";
+import { phaseSafeShowcaseDelay } from "../lib/optical-clock";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -165,13 +167,16 @@ export function ParticlePairLab() {
 
   useEffect(() => {
     if (!autoShowcase) return;
-    const interval = window.setInterval(() => {
+    let timeout = 0;
+    const advance = () => {
       setVisualMode((current) => {
         const index = VISUAL_MODES.findIndex((mode) => mode.id === current);
         return VISUAL_MODES[(index + 1) % VISUAL_MODES.length].id;
       });
-    }, 4200);
-    return () => window.clearInterval(interval);
+      timeout = window.setTimeout(advance, phaseSafeShowcaseDelay(performance.now()));
+    };
+    timeout = window.setTimeout(advance, phaseSafeShowcaseDelay(performance.now()));
+    return () => window.clearTimeout(timeout);
   }, [autoShowcase]);
 
   useEffect(() => {
@@ -552,11 +557,12 @@ export function ParticlePairLab() {
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} renderQuality={renderQuality} onPerformance={setRenderPerformance} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
+            <PhaseChronograph />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
           </div>
           <div className="mode-toolbar">
             <label><span>SEARCH MODES</span><input value={modeQuery} onChange={(event) => setModeQuery(event.target.value)} placeholder="Galaxy, organic, glyph…" /></label>
-            <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP SHOWCASE" : "AUTO SHOWCASE"}</button>
+            <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP CHOREOGRAPHY" : "PHASE-SAFE SHOWCASE"}</button>
           </div>
           <button ref={immersiveLaunchRef} className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>IMMERSIVE TRANSMIT</strong><small>Distraction-free optical stage</small></button>
           <div className="mode-categories" aria-label="Mode categories">
@@ -711,7 +717,7 @@ export function ParticlePairLab() {
           <div className="immersive-glass" aria-hidden="true" />
           <header><div className="immersive-brand"><span /><div><strong>PARTICLEPAIR</strong><small>LIVE OPTICAL LINK · {wakeLockActive ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button ref={immersiveCloseRef} type="button" onClick={() => setImmersive(false)} aria-label="Exit immersive transmitter">ESC <i>×</i></button></header>
           <div className="immersive-meta"><span>{selectedVisualMode.category} · {visualDna.label} · {visualDna.fingerprint}</span><h2>{selectedVisualMode.name}</h2><p>{selectedVisualMode.subtitle}</p><div className="immersive-palette">{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
-          <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><div><span className="live-dot" />TRANSMITTING · PHASE 300 MS · CRC-16</div><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
+          <div className="immersive-controls"><button type="button" onClick={() => stepVisualMode(-1)} aria-label="Previous visual mode">←</button><PhaseChronograph compact /><button type="button" onClick={() => stepVisualMode(1)} aria-label="Next visual mode">→</button></div>
           <div className="immersive-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
         </section>
       ) : null}
