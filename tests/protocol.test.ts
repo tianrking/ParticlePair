@@ -21,7 +21,7 @@ import {
 } from "../lib/optical-decoder";
 import { combineOpticalEvidence, rankOpticalFrameAnalyses } from "../lib/optical-search";
 import { bytesToHex, decodeParticleCode, encodeParticleCode } from "../lib/protocol";
-import { VISUAL_MODES, visualModeVariant } from "../lib/visual-modes";
+import { VISUAL_MODES, VISUAL_MODE_COUNT, visualModeVariant } from "../lib/visual-modes";
 import { scoreVisualDistinctness, visualAuditPasses, type VisualQualityMetrics } from "../lib/visual-quality";
 import { derivePairingSas } from "../lib/pairing-sas";
 import { buildDiagnosticReport } from "../lib/diagnostic-report";
@@ -45,7 +45,7 @@ import { rankModeChannelObservations } from "../lib/mode-oracle";
 import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { receiverGuidance } from "../lib/receiver-guidance";
 import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
-import { buildReliabilityEvidence, inspectReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
+import { buildReliabilityEvidence, inspectReliabilityEvidence, RELIABILITY_CASE_COUNT, verifyReliabilityEvidence } from "../lib/reliability-evidence";
 import { compareReliabilityEvidence } from "../lib/reliability-comparator";
 import { rankUniversalChannelAtlas, type AtlasObservation } from "../lib/universal-channel-atlas";
 import { selectSignalArchitecture, SIGNAL_STRENGTH_CANDIDATES, type SignalArchitectureObservation } from "../lib/adaptive-signal-architect";
@@ -53,17 +53,17 @@ import { selectSignalArchitecture, SIGNAL_STRENGTH_CANDIDATES, type SignalArchit
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
 test("reliability evidence seal is deterministic and detects result tampering", async () => {
-  const cells = Array.from({ length: 400 }, (_, index) => ({ passed: true, quality: 0.7 + (index % 7) * 0.01 })); const first = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const second = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells);
+  const cells = Array.from({ length: RELIABILITY_CASE_COUNT }, (_, index) => ({ passed: true, quality: 0.7 + (index % 7) * 0.01 })); const first = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const second = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells);
   assert.equal(first.seal.digest, second.seal.digest); assert.equal(await verifyReliabilityEvidence(first), true); const tampered = { ...structuredClone(first), results: [...first.results] }; tampered.results[0] = { passed: false, quality: 0 }; assert.equal(await verifyReliabilityEvidence(tampered), false);
 });
 
 test("reliability evidence is explicitly redacted and refuses partial runs", async () => {
-  const cells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.9 })); const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const serialized = JSON.stringify(evidence);
-  assert.deepEqual(evidence.privacy, { cameraFramesIncluded: false, sasIncluded: false, secretIncluded: false, sessionIdIncluded: false }); assert.ok(!serialized.includes("secretHex")); assert.ok(!serialized.includes("00112233445566778899AABBCCDDEEFF")); assert.ok(!serialized.includes("ABCD-EFGH")); assert.equal(evidence.seal.trust, "integrity-only-not-attestation"); await assert.rejects(() => buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells.slice(0, 399)));
+  const cells = Array.from({ length: RELIABILITY_CASE_COUNT }, () => ({ passed: true, quality: 0.9 })); const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells); const serialized = JSON.stringify(evidence);
+  assert.deepEqual(evidence.privacy, { cameraFramesIncluded: false, sasIncluded: false, secretIncluded: false, sessionIdIncluded: false }); assert.ok(!serialized.includes("secretHex")); assert.ok(!serialized.includes("00112233445566778899AABBCCDDEEFF")); assert.ok(!serialized.includes("ABCD-EFGH")); assert.equal(evidence.seal.trust, "integrity-only-not-attestation"); await assert.rejects(() => buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells.slice(0, -1)));
 });
 
 test("reliability evidence inspector distinguishes verified, tampered, and invalid files", async () => {
-  const cells = Array.from({ length: 400 }, (_, index) => ({ passed: index !== 17, quality: index === 17 ? 0.42 : 0.88 }));
+  const cells = Array.from({ length: RELIABILITY_CASE_COUNT }, (_, index) => ({ passed: index !== 17, quality: index === 17 ? 0.42 : 0.88 }));
   const evidence = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, cells);
   const verified = await inspectReliabilityEvidence(evidence);
   assert.equal(verified.status, "verified");
@@ -79,23 +79,23 @@ test("reliability evidence inspector distinguishes verified, tampered, and inval
 });
 
 test("reliability comparator classifies meaningful cell and mode regressions", async () => {
-  const baselineCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.8 }));
+  const baselineCells = Array.from({ length: RELIABILITY_CASE_COUNT }, () => ({ passed: true, quality: 0.8 }));
   const candidateCells = baselineCells.map((cell) => ({ ...cell }));
   candidateCells[0] = { passed: false, quality: 0.76 };
-  candidateCells[50] = { passed: true, quality: 0.77 };
+  candidateCells[VISUAL_MODE_COUNT] = { passed: true, quality: 0.77 };
   candidateCells[1] = { passed: true, quality: 0.83 };
   candidateCells[2] = { passed: true, quality: 0.81 };
   const baseline = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, baselineCells);
   const candidate = await buildReliabilityEvidence("2026-07-11T00:01:00.000Z", 0.9, candidateCells);
   const comparison = compareReliabilityEvidence(baseline, candidate);
-  assert.deepEqual({ improved: comparison.improved, regressed: comparison.regressed, stable: comparison.stable, verdict: comparison.verdict }, { improved: 1, regressed: 2, stable: 397, verdict: "mixed" });
+  assert.deepEqual({ improved: comparison.improved, regressed: comparison.regressed, stable: comparison.stable, verdict: comparison.verdict }, { improved: 1, regressed: 2, stable: RELIABILITY_CASE_COUNT - 3, verdict: "mixed" });
   assert.deepEqual(comparison.cells.slice(0, 3).map((cell) => cell.state), ["regressed", "improved", "stable"]);
   assert.equal(comparison.modes[0].index, 0); assert.equal(comparison.modes[0].regressed, 2);
 });
 
 test("reliability comparator reports stable and improved evidence deterministically", async () => {
-  const baselineCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.7 }));
-  const improvedCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.73 }));
+  const baselineCells = Array.from({ length: RELIABILITY_CASE_COUNT }, () => ({ passed: true, quality: 0.7 }));
+  const improvedCells = Array.from({ length: RELIABILITY_CASE_COUNT }, () => ({ passed: true, quality: 0.73 }));
   const baseline = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, baselineCells);
   const same = await buildReliabilityEvidence("2026-07-11T00:01:00.000Z", 0.9, baselineCells);
   const improved = await buildReliabilityEvidence("2026-07-11T00:02:00.000Z", 0.9, improvedCells);
@@ -169,22 +169,22 @@ test("showcase scheduling lands only on complete dual-phase boundaries", () => {
 test("environment oracle ranks exact CRC recovery before quality and repair count", () => {
   const ranked = rankModeChannelObservations([
     { corrected: 0, mode: "galaxy", passed: false, quality: 0.99 },
-    { corrected: 2, mode: "portal", passed: true, quality: 0.82 },
+    { corrected: 2, mode: "orbit", passed: true, quality: 0.82 },
     { corrected: 0, mode: "jellyfish", passed: true, quality: 0.82 },
-    { corrected: 0, mode: "anemone", passed: true, quality: 0.76 },
+    { corrected: 0, mode: "ember", passed: true, quality: 0.76 },
   ]);
-  assert.deepEqual(ranked.map((result) => result.mode), ["jellyfish", "portal", "anemone", "galaxy"]); assert.deepEqual(ranked.map((result) => result.rank), [1, 2, 3, 4]);
+  assert.deepEqual(ranked.map((result) => result.mode), ["jellyfish", "orbit", "ember", "galaxy"]); assert.deepEqual(ranked.map((result) => result.rank), [1, 2, 3, 4]);
 });
 
 test("environment oracle is stable for exact score ties", () => {
-  const ranked = rankModeChannelObservations([{ corrected: 0, mode: "portal", passed: true, quality: 0.8 }, { corrected: 0, mode: "galaxy", passed: true, quality: 0.8 }]);
-  assert.deepEqual(ranked.map((result) => result.mode), ["galaxy", "portal"]);
+  const ranked = rankModeChannelObservations([{ corrected: 0, mode: "aurora", passed: true, quality: 0.8 }, { corrected: 0, mode: "galaxy", passed: true, quality: 0.8 }]);
+  assert.deepEqual(ranked.map((result) => result.mode), ["galaxy", "aurora"]);
 });
 
 test("studio capsule round-trips allowlisted visual configuration", () => {
-  const preset: StudioPreset = { dwell: 900, mode: "portal", protocol: 2, quality: "auto", strength: 0.87 };
+  const preset: StudioPreset = { dwell: 900, mode: "glyph", protocol: 2, quality: "auto", strength: 0.87 };
   const encoded = encodeStudioPreset(preset); assert.deepEqual(decodeStudioPreset(encoded), preset); assert.match(studioPresetId(preset), /^[0-9A-F]{8}$/);
-  assert.equal(decodeStudioPreset("pp1~unknown~2~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~3~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~2~700~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~2~900~4~auto"), null);
+  assert.equal(decodeStudioPreset("pp1~unknown~2~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~glyph~3~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~glyph~2~700~87~auto"), null); assert.equal(decodeStudioPreset("pp1~glyph~2~900~4~auto"), null);
 });
 
 test("studio capsule URL strips all unrelated and potentially secret material", () => {
@@ -255,9 +255,10 @@ test("visual DNA is deterministic, payload-sensitive, and bounded", () => {
   assert.ok(first.chromaShift >= 0 && first.chromaShift <= 1);
 });
 
-test("visual laboratory exposes exactly fifty documented unique modes", () => {
-  assert.equal(VISUAL_MODES.length, 50);
-  assert.equal(new Set(VISUAL_MODES.map((mode) => mode.id)).size, 50);
+test("visual laboratory exposes exactly one representative for every renderer family", () => {
+  assert.equal(VISUAL_MODES.length, 13);
+  assert.equal(new Set(VISUAL_MODES.map((mode) => mode.kind)).size, VISUAL_MODE_COUNT);
+  assert.equal(new Set(VISUAL_MODES.map((mode) => mode.id)).size, VISUAL_MODE_COUNT);
   for (const mode of VISUAL_MODES) {
     assert.ok(mode.algorithm.length > 24, `${mode.id} needs an algorithm explanation`);
     assert.ok(mode.extraction.length > 24, `${mode.id} needs a camera extraction explanation`);
@@ -273,15 +274,13 @@ test("visual laboratory exposes exactly fifty documented unique modes", () => {
   }
 });
 
-test("visual distinctness scores nearest neighbors within each renderer family", () => {
+test("visual distinctness has no same-family duplicate in the public catalog", () => {
   const metric = (fingerprint: number[]): VisualQualityMetrics => ({ contrast: 80, coverage: 80, distinctness: 0, fingerprint, grade: 80, motion: 80, vibrancy: 80 });
-  const duplicate = scoreVisualDistinctness({ galaxy: metric([0, 0, 0]), andromeda: metric([0, 0, 0]) });
-  assert.equal(duplicate.galaxy.distinctness, 0); assert.equal(duplicate.andromeda.distinctness, 0);
-  const separated = scoreVisualDistinctness({ galaxy: metric([-1, -1, -1]), andromeda: metric([1, 1, 1]) });
-  assert.equal(separated.galaxy.distinctness, 100); assert.equal(separated.andromeda.distinctness, 100);
+  const scored = scoreVisualDistinctness(Object.fromEntries(VISUAL_MODES.map((mode) => [mode.id, metric([0, 0, 0])])));
+  assert.ok(Object.values(scored).every((result) => result.distinctness === 100));
 });
 
-test("visual audit gate requires all fifty modes to clear quality and distinctness floors", () => {
+test("visual audit gate requires every structurally unique mode to clear quality and distinctness floors", () => {
   const metric = (grade = 60, distinctness = 40): VisualQualityMetrics => ({ contrast: 80, coverage: 80, distinctness, fingerprint: [0], grade, motion: 80, vibrancy: 80 });
   const passing = Object.fromEntries(VISUAL_MODES.map((mode) => [mode.id, metric()]));
   assert.equal(visualAuditPasses(passing), true);
@@ -608,13 +607,6 @@ test("cyan opponent projection rejects white-balance contamination without erasi
   assert.ok(brightCarrier - dimCarrier > 100);
   assert.ok(brightCarrier > blueNebula * 4);
   assert.ok(brightCarrier > magentaNebula * 4);
-});
-
-test("quantum foam palette remains spectrally separated from the cyan carrier", () => {
-  const mode = VISUAL_MODES.find((candidate) => candidate.id === "quantum-foam"); assert.ok(mode);
-  const carrier = opticalPixelValue(42, 210, 178);
-  const projections = mode.colors.map((hex) => opticalPixelValue(Number.parseInt(hex.slice(1, 3), 16), Number.parseInt(hex.slice(3, 5), 16), Number.parseInt(hex.slice(5, 7), 16)));
-  assert.ok(Math.max(...projections) < carrier * 0.45);
 });
 
 test("capture health separates useful range from clipping, darkness, and flat frames", () => {

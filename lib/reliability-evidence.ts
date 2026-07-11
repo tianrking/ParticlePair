@@ -1,10 +1,15 @@
 import { summarizeReliability, type ReliabilityCell } from "./reliability-marathon";
+import { VISUAL_MODE_COUNT } from "./visual-modes";
+
+export const RELIABILITY_SECRET_COUNT = 8;
+export const RELIABILITY_CASE_COUNT = RELIABILITY_SECRET_COUNT * VISUAL_MODE_COUNT;
+export const RELIABILITY_CORPUS_ID = `PP-CORPUS-${RELIABILITY_SECRET_COUNT}X${VISUAL_MODE_COUNT}-V2`;
 
 export interface ReliabilityEvidence {
-  schema: "particlepair-reliability/v1";
+  schema: "particlepair-reliability/v2";
   createdAt: string;
   privacy: { cameraFramesIncluded: false; sasIncluded: false; secretIncluded: false; sessionIdIncluded: false };
-  corpus: { cases: number; id: "PP-CORPUS-8X50-V1"; modes: 50; secrets: 8 };
+  corpus: { cases: number; id: string; modes: number; secrets: number };
   transmitter: { modulationStrength: number };
   summary: { minimumQuality: number; passed: number; rate: number; total: number };
   results: readonly { passed: boolean; quality: number }[];
@@ -21,9 +26,9 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 function evidencePayload(createdAt: string, modulationStrength: number, cells: readonly ReliabilityCell[]) {
-  if (cells.length !== 400) throw new Error("Reliability evidence requires exactly 400 cases");
+  if (cells.length !== RELIABILITY_CASE_COUNT) throw new Error(`Reliability evidence requires exactly ${RELIABILITY_CASE_COUNT} cases`);
   const results = cells.map((cell) => ({ passed: cell.passed, quality: Number(cell.quality.toFixed(4)) })); const summary = summarizeReliability(results);
-  return { schema: "particlepair-reliability/v1" as const, createdAt, privacy: { cameraFramesIncluded: false as const, sasIncluded: false as const, secretIncluded: false as const, sessionIdIncluded: false as const }, corpus: { cases: 400, id: "PP-CORPUS-8X50-V1" as const, modes: 50 as const, secrets: 8 as const }, transmitter: { modulationStrength: Number(modulationStrength.toFixed(2)) }, summary: { minimumQuality: Number(summary.minimumQuality.toFixed(4)), passed: summary.passed, rate: Number(summary.rate.toFixed(4)), total: summary.total }, results };
+  return { schema: "particlepair-reliability/v2" as const, createdAt, privacy: { cameraFramesIncluded: false as const, sasIncluded: false as const, secretIncluded: false as const, sessionIdIncluded: false as const }, corpus: { cases: RELIABILITY_CASE_COUNT, id: RELIABILITY_CORPUS_ID, modes: VISUAL_MODE_COUNT, secrets: RELIABILITY_SECRET_COUNT }, transmitter: { modulationStrength: Number(modulationStrength.toFixed(2)) }, summary: { minimumQuality: Number(summary.minimumQuality.toFixed(4)), passed: summary.passed, rate: Number(summary.rate.toFixed(4)), total: summary.total }, results };
 }
 
 export async function buildReliabilityEvidence(createdAt: string, modulationStrength: number, cells: readonly ReliabilityCell[]): Promise<ReliabilityEvidence> {
@@ -55,22 +60,22 @@ export async function inspectReliabilityEvidence(input: unknown): Promise<Reliab
   const privacyIsRedacted = privacy?.cameraFramesIncluded === false && privacy.sasIncluded === false && privacy.secretIncluded === false && privacy.sessionIdIncluded === false;
   const strength = transmitter?.modulationStrength;
   const structureIsValid = hasExactKeys(value, ["schema", "createdAt", "privacy", "corpus", "transmitter", "summary", "results", "seal"])
-    && value.schema === "particlepair-reliability/v1"
+    && value.schema === "particlepair-reliability/v2"
     && typeof value.createdAt === "string" && Number.isFinite(Date.parse(value.createdAt)) && new Date(value.createdAt).toISOString() === value.createdAt
     && !!privacy && hasExactKeys(privacy, ["cameraFramesIncluded", "sasIncluded", "secretIncluded", "sessionIdIncluded"]) && privacyIsRedacted
-    && !!corpus && hasExactKeys(corpus, ["cases", "id", "modes", "secrets"]) && corpus.cases === 400 && corpus.id === "PP-CORPUS-8X50-V1" && corpus.modes === 50 && corpus.secrets === 8
+    && !!corpus && hasExactKeys(corpus, ["cases", "id", "modes", "secrets"]) && corpus.cases === RELIABILITY_CASE_COUNT && corpus.id === RELIABILITY_CORPUS_ID && corpus.modes === VISUAL_MODE_COUNT && corpus.secrets === RELIABILITY_SECRET_COUNT
     && !!transmitter && hasExactKeys(transmitter, ["modulationStrength"]) && typeof strength === "number" && Number.isFinite(strength) && strength >= 0 && strength <= 1 && isRounded(strength, 2)
     && !!summary && hasExactKeys(summary, ["minimumQuality", "passed", "rate", "total"])
-    && Array.isArray(results) && results.length === 400 && results.every(qualityIsValid)
+    && Array.isArray(results) && results.length === RELIABILITY_CASE_COUNT && results.every(qualityIsValid)
     && !!seal && hasExactKeys(seal, ["algorithm", "digest", "trust"]) && seal.algorithm === "SHA-256" && typeof seal.digest === "string" && /^[0-9A-F]{64}$/.test(seal.digest)
     && seal.trust === "integrity-only-not-attestation";
   if (!structureIsValid) return { status: "invalid", detail: "Schema, corpus, privacy, or result constraints are invalid." };
   const evidence = input as ReliabilityEvidence;
   if (!await verifyReliabilityEvidence(evidence)) return { status: "tampered", detail: "SHA-256 mismatch: the sealed record was modified." };
   const expected = summarizeReliability(evidence.results);
-  const summaryIsValid = summary?.total === 400 && summary.passed === expected.passed
+  const summaryIsValid = summary?.total === RELIABILITY_CASE_COUNT && summary.passed === expected.passed
     && summary.minimumQuality === Number(expected.minimumQuality.toFixed(4))
     && summary.rate === Number(expected.rate.toFixed(4));
-  if (!summaryIsValid) return { status: "invalid", detail: "The summary does not match the 400 recorded outcomes." };
+  if (!summaryIsValid) return { status: "invalid", detail: `The summary does not match the ${RELIABILITY_CASE_COUNT} recorded outcomes.` };
   return { status: "verified", evidence, detail: "Canonical structure and SHA-256 integrity are valid." };
 }

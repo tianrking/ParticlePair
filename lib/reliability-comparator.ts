@@ -1,4 +1,5 @@
-import type { ReliabilityEvidence } from "./reliability-evidence";
+import { RELIABILITY_CASE_COUNT, RELIABILITY_SECRET_COUNT, type ReliabilityEvidence } from "./reliability-evidence";
+import { VISUAL_MODE_COUNT } from "./visual-modes";
 
 export type ReliabilityDeltaState = "improved" | "regressed" | "stable";
 
@@ -15,7 +16,7 @@ export interface ReliabilityComparison {
 const MEANINGFUL_DELTA = 0.02;
 
 export function compareReliabilityEvidence(baseline: ReliabilityEvidence, candidate: ReliabilityEvidence): ReliabilityComparison {
-  if (baseline.corpus.id !== candidate.corpus.id || baseline.results.length !== 400 || candidate.results.length !== 400) throw new Error("Reliability evidence corpora are not comparable");
+  if (baseline.corpus.id !== candidate.corpus.id || baseline.results.length !== RELIABILITY_CASE_COUNT || candidate.results.length !== RELIABILITY_CASE_COUNT) throw new Error("Reliability evidence corpora are not comparable");
   const cells = baseline.results.map((before, index) => {
     const after = candidate.results[index];
     const delta = Number((after.quality - before.quality).toFixed(4));
@@ -29,8 +30,8 @@ export function compareReliabilityEvidence(baseline: ReliabilityEvidence, candid
   const regressed = cells.filter((cell) => cell.state === "regressed").length;
   const stable = cells.length - improved - regressed;
   const averageQualityDelta = Number((cells.reduce((sum, cell) => sum + cell.delta, 0) / cells.length).toFixed(4));
-  const modes = Array.from({ length: 50 }, (_, index) => {
-    const modeCells = Array.from({ length: 8 }, (_, secret) => cells[secret * 50 + index]);
+  const modes = Array.from({ length: VISUAL_MODE_COUNT }, (_, index) => {
+    const modeCells = Array.from({ length: RELIABILITY_SECRET_COUNT }, (_, secret) => cells[secret * VISUAL_MODE_COUNT + index]);
     return {
       averageDelta: Number((modeCells.reduce((sum, cell) => sum + cell.delta, 0) / modeCells.length).toFixed(4)),
       improved: modeCells.filter((cell) => cell.state === "improved").length,
