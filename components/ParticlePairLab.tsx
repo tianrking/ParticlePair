@@ -600,7 +600,7 @@ export function ParticlePairLab() {
         </div>
       </header>
 
-      <section className="hero" id="top">
+      <section className="hero" id="top" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
         <div className="hero-copy" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
           <div className="hero-intro">
             <p className="eyebrow">{copy.eyebrow}</p>
