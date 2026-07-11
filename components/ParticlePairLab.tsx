@@ -25,6 +25,7 @@ import {
 } from "../lib/rendered-pixel-loopback";
 import {
   isLanguage,
+  LAB_COPY,
   LANGUAGE_OPTIONS,
   UI_COPY,
   type Language,
@@ -120,6 +121,7 @@ export function ParticlePairLab() {
   const [modeQuery, setModeQuery] = useState("");
   const [modeCategory, setModeCategory] = useState<"All" | VisualCategory>("All");
   const [autoShowcase, setAutoShowcase] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [renderQuality, setRenderQuality] = useState<RenderQualitySetting>("auto");
@@ -168,6 +170,7 @@ export function ParticlePairLab() {
   const [pixelTestDetail, setPixelTestDetail] = useState<PixelDetail>({ kind: "idle" });
   const [pixelResult, setPixelResult] = useState<RenderedPixelLoopbackResult | null>(null);
   const copy = UI_COPY[language];
+  const labCopy = LAB_COPY[language];
   const missionCopy = MISSION_COPY[language];
   const senderSasKey = /^[0-9a-f]{32}$/i.test(secretHex) ? `${secretHex.toLowerCase()}:${protocolMode === 2 ? v2SessionId : 0}` : "";
   const receiverSasKey = result ? `${result.secretHex}:${result.protocolVersion === 2 ? result.sessionId ?? 0 : 0}` : "";
@@ -195,7 +198,7 @@ export function ParticlePairLab() {
   }, []);
 
   useEffect(() => {
-    if (!autoShowcase) return;
+    if (!autoShowcase || paused || prefersReducedMotion) return;
     let timeout = 0;
     const advance = () => {
       setVisualMode((current) => {
@@ -206,7 +209,15 @@ export function ParticlePairLab() {
     };
     timeout = window.setTimeout(advance, phaseSafeShowcaseDelay(performance.now()));
     return () => window.clearTimeout(timeout);
-  }, [autoShowcase]);
+  }, [autoShowcase, paused, prefersReducedMotion]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setPrefersReducedMotion(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     if (protocolMode !== 2 || paused) return;
@@ -580,7 +591,7 @@ export function ParticlePairLab() {
           <span className="brand-mark"><i /><i /><i /></span>
           <span>PARTICLEPAIR</span>
         </a>
-        <div className="protocol-pill"><span /> Optical OOB · v1</div>
+        <div className="protocol-pill" aria-live="polite"><span /> Optical OOB · v{protocolMode}</div>
         <div className="topbar-actions">
           <a className="text-link" href="#protocol">{copy.protocolLink} <span>↗</span></a>
           <nav className="language-switcher" aria-label={copy.languageSelector}>
@@ -633,12 +644,12 @@ export function ParticlePairLab() {
               {paused ? "▶" : "Ⅱ"}
             </button>
           </div>
-          <div className="protocol-mode" aria-label="Optical protocol version">
-            <button type="button" aria-pressed={protocolMode === 1} className={protocolMode === 1 ? "is-active" : ""} onClick={() => setProtocolMode(1)}><span>V1</span><strong>STABLE FRAME</strong><small>Single-frame compatibility</small></button>
-            <button type="button" aria-pressed={protocolMode === 2} className={protocolMode === 2 ? "is-active" : ""} onClick={() => setProtocolMode(2)}><span>V2</span><strong>FOUNTAIN STREAM</strong><small>Loss-tolerant · anti-replay</small></button>
-            <div><span>SESSION</span><code>{v2SessionId.toString(16).padStart(8, "0")}</code><i>{protocolMode === 2 ? `EQ ${v2Sequence + 1}/15` : "READY"}</i></div>
+          <div className="protocol-mode" aria-label={labCopy.protocolVersion}>
+            <button type="button" aria-pressed={protocolMode === 1} className={protocolMode === 1 ? "is-active" : ""} onClick={() => setProtocolMode(1)}><span>V1</span><strong>{labCopy.stableFrame}</strong><small>{labCopy.stableDetail}</small></button>
+            <button type="button" aria-pressed={protocolMode === 2} className={protocolMode === 2 ? "is-active" : ""} onClick={() => setProtocolMode(2)}><span>V2</span><strong>{labCopy.fountainStream}</strong><small>{labCopy.fountainDetail}</small></button>
+            <div><span>{labCopy.session}</span><code>{v2SessionId.toString(16).padStart(8, "0")}</code><i>{protocolMode === 2 ? `EQ ${v2Sequence + 1}/15` : labCopy.ready}</i></div>
           </div>
-          <div className={`v2-proof ${v2Test.status}`} role="status" aria-live="polite" aria-busy={v2Test.status === "running"}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? "TESTING V2…" : "V2 CANVAS PROOF"}</button><div><span>FOUNTAIN RECOVERY</span><strong>{v2Test.detail}</strong></div></div>
+          <div className={`v2-proof ${v2Test.status}`} role="status" aria-live="polite" aria-busy={v2Test.status === "running"}><button type="button" disabled={!validSecret || v2Test.status === "running" || paused} onClick={runV2Loopback}>{v2Test.status === "running" ? labCopy.v2Testing : labCopy.v2Proof}</button><div><span>{labCopy.fountainRecovery}</span><strong>{v2Test.status === "idle" ? copy.pixelIdle : v2Test.detail}</strong></div></div>
           {protocolMode === 2 ? <div className="fountain-visualizer">
             <div className="fountain-heading"><span>LIVE EQUATION MATRIX</span><strong>{v2ActiveBlocks.map((active, index) => active ? `B${index}` : "").filter(Boolean).join(" ⊕ ")} → P</strong><i>TTL {Math.max(0, 10 - (v2MinuteNow() - v2IssuedMinute))} MIN</i></div>
             <div className="source-blocks">{v2ActiveBlocks.map((active, index) => <div key={index} className={active ? "is-active" : ""}><span>B{index}</span><i>{secretHex.slice(index * 8, index * 8 + 8) || "00000000"}</i></div>)}<b>⊕</b><div className="parity-block"><span>P</span><i>MASK {v2Mask.toString(2).padStart(4, "0")}</i></div></div>
@@ -646,19 +657,19 @@ export function ParticlePairLab() {
             <div className="dwell-selector" aria-label="Fountain fragment timing">{([{ value: 600, label: "FAST", detail: "600 ms" }, { value: 900, label: "BALANCED", detail: "900 ms" }, { value: 1200, label: "ROBUST", detail: "1200 ms" }] as const).map((option) => <button type="button" key={option.value} aria-pressed={v2Dwell === option.value} className={v2Dwell === option.value ? "is-active" : ""} onClick={() => setV2Dwell(option.value)}><strong>{option.label}</strong><small>{option.detail}</small></button>)}</div>
             <p>Four independent equations reconstruct the 128-bit secret. Duplicate masks do not increase rank.</p>
           </div> : null}
-          {activeSenderSas ? <div className="sas-signature"><div><span>HUMAN AUTHENTICATION</span><strong>{activeSenderSas.words.join(" · ")}</strong></div><code>{activeSenderSas.code}</code><i>Compare on both devices</i></div> : null}
+          {activeSenderSas ? <div className="sas-signature"><div><span>{labCopy.humanAuthentication}</span><strong>{activeSenderSas.words.join(" · ")}</strong></div><code>{activeSenderSas.code}</code><i>{labCopy.compareDevices}</i></div> : null}
           <div className="watch-frame">
             <ParticleCloud ariaLabel={copy.particleCanvasLabel} canvasRef={particleCanvasRef} cells={frame} strength={strength} paused={paused || immersive} mode={visualMode} renderQuality={renderQuality} onPerformance={setRenderPerformance} />
             <div className="optical-boundary" aria-hidden="true"><i /><i /><i /><i /></div>
             <div className="watch-glass" />
-            <PhaseChronograph />
+            <PhaseChronograph paused={paused} />
             <span className="broadcast-label"><i /> {copy.liveSignal}</span>
           </div>
           <div className="mode-toolbar">
             <label><span>SEARCH MODES</span><input value={modeQuery} onChange={(event) => setModeQuery(event.target.value)} placeholder="Galaxy, organic, glyph…" /></label>
             <button type="button" className={autoShowcase ? "is-active" : ""} onClick={() => setAutoShowcase((value) => !value)}>{autoShowcase ? "STOP CHOREOGRAPHY" : "PHASE-SAFE SHOWCASE"}</button>
           </div>
-          <button ref={immersiveLaunchRef} className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>IMMERSIVE TRANSMIT</strong><small>Distraction-free optical stage</small></button>
+          <button ref={immersiveLaunchRef} className="immersive-launch" type="button" onClick={() => setImmersive(true)}><span>◉</span><strong>{labCopy.immersiveTransmit}</strong><small>{labCopy.immersiveTransmitDetail}</small></button>
           <div className="mode-categories" aria-label="Mode categories">
             {VISUAL_CATEGORIES.map((category) => <button key={category} type="button" className={modeCategory === category ? "is-active" : ""} onClick={() => setModeCategory(category)}>{category}</button>)}
           </div>
@@ -672,8 +683,8 @@ export function ParticlePairLab() {
           <div className="mode-intelligence">
             <div className="mode-intelligence-heading"><span>{selectedVisualMode.category}</span><strong>{selectedVisualMode.name}</strong><i>{VISUAL_MODES.findIndex((mode) => mode.id === visualMode) + 1}/{VISUAL_MODE_COUNT}</i></div>
             <div className="mode-palette" aria-label="Mode color palette">{selectedVisualMode.colors.map((color) => <span key={color} style={{ backgroundColor: color }} />)}</div>
-            <div className="visual-dna" aria-label={`Visual DNA ${visualDna.label} ${visualDna.fingerprint}`}><span>VISUAL DNA</span><strong>{visualDna.label}</strong><code>{visualDna.fingerprint}</code><small>{visualDna.symmetry}-fold topology · payload-derived · not authentication</small></div>
-            <dl><div><dt>GENERATIVE ALGORITHM</dt><dd>{selectedVisualMode.algorithm}</dd></div><div><dt>CAMERA EXTRACTION</dt><dd>{selectedVisualMode.extraction}</dd></div><div><dt>ROBUSTNESS</dt><dd>{selectedVisualMode.robustness}</dd></div></dl>
+            <div className="visual-dna" aria-label={`${labCopy.visualDna} ${visualDna.label} ${visualDna.fingerprint}`}><span>{labCopy.visualDna}</span><strong>{visualDna.label}</strong><code>{visualDna.fingerprint}</code><small>{visualDna.symmetry}-{labCopy.payloadDerived}</small></div>
+            <dl><div><dt>{labCopy.generativeAlgorithm}</dt><dd>{selectedVisualMode.algorithm}</dd></div><div><dt>{labCopy.cameraExtraction}</dt><dd>{selectedVisualMode.extraction}</dd></div><div><dt>{labCopy.robustness}</dt><dd>{selectedVisualMode.robustness}</dd></div></dl>
           </div>
           <div className="strength-row">
             <label htmlFor="strength">{copy.modulationStrength}</label>
@@ -689,8 +700,8 @@ export function ParticlePairLab() {
             <output>{Math.round(strength * 100)}%</output>
           </div>
           <div className={`adaptive-calibration signal-architect ${calibrationStatus}`} role="status" aria-live="polite" aria-busy={calibrationStatus === "running"}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? `ARCHITECTING ${calibrationCells.length}/42…` : "ARCHITECT SIGNAL"}</button><div><span>ADAPTIVE SIGNAL ARCHITECT</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO UNIVERSAL SAFE MARGIN" : "Find the quietest signal that survives all six channels"}</strong></div>{calibrationCells.length ? <div className="signal-spectrum" aria-label={`${calibrationCells.filter((cell) => cell.passed).length} of ${calibrationCells.length} signal calibration cases passed`}>{SIGNAL_STRENGTH_CANDIDATES.map((candidate, row) => <div key={candidate}><b>{Math.round(candidate * 100)}%</b>{CAMERA_CHANNEL_PROFILES.map((profile, column) => { const cell = calibrationCells[row * 6 + column]; return <i key={profile} className={cell ? cell.passed && cell.quality >= 0.47 ? "pass" : "fail" : undefined} title={`${Math.round(candidate * 100)}% · ${profile}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "CRC PASS" : "REJECTED"}` : " · pending"}`} />; })}</div>)}</div> : null}{signalArchitecture ? <small>6/6 CHANNELS · {Math.round(signalArchitecture.minimumQuality * 100)}% WORST QUALITY · +{Math.round(signalArchitecture.margin * 100)}% SAFETY</small> : null}</div>
-          <div className="render-budget" aria-label="Decorative render quality"><div><span>ADAPTIVE MOTION ENGINE</span><strong>{renderPerformance.fps ?? "—"} FPS · {renderPerformance.profile.toUpperCase()} · carrier always full resolution</strong></div>{(["auto", "efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
-          <div className={`studio-capsule ${capsuleStatus}`}><div><span>STUDIO CAPSULE</span><strong>{selectedVisualMode.name} · V{protocolMode} · {Math.round(strength * 100)}%</strong><code>{capsuleId}</code><small>Visual configuration only · zero secret material</small></div><button type="button" onClick={copyStudioCapsule}>{capsuleStatus === "copied" ? "COPIED ✓" : capsuleStatus === "error" ? "COPY FAILED" : "COPY STUDIO LINK"}</button></div>
+          <div className="render-budget" aria-label="Decorative render quality"><div><span>{labCopy.adaptiveMotion}</span><strong>{renderPerformance.fps ?? "—"} FPS · {renderPerformance.profile.toUpperCase()} · {labCopy.carrierFullResolution}</strong></div>{(["auto", "efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
+          <div className={`studio-capsule ${capsuleStatus}`}><div><span>{labCopy.studioCapsule}</span><strong>{selectedVisualMode.name} · V{protocolMode} · {Math.round(strength * 100)}%</strong><code>{capsuleId}</code><small>{labCopy.visualConfigOnly}</small></div><button type="button" onClick={copyStudioCapsule}>{capsuleStatus === "copied" ? labCopy.copied : capsuleStatus === "error" ? labCopy.copyFailed : labCopy.copyStudioLink}</button></div>
         </div>
       </section>
 

@@ -91,7 +91,7 @@ export function ParticleCloud({ ariaLabel, canvasRef: externalCanvasRef, cells, 
 
     animationFrame = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationFrame);
-  }, [canvasRef, paused]);
+  }, [canvasRef, cells, mode, paused, renderQuality, strength]);
 
   return <canvas ref={canvasRef} className="particle-canvas" aria-label={ariaLabel} />;
 }

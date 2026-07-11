@@ -24,7 +24,7 @@ import {
 } from "../lib/adaptive-optical-search";
 import { decodeParticleCode, type DecodedParticleCode } from "../lib/protocol";
 import { decodeV2Fragment, V2FountainDecoder } from "../lib/protocol-v2";
-import { UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
+import { LAB_COPY, UI_COPY, type Language, type ScannerCopy } from "../lib/i18n";
 import { FrameTimingEstimator, selectPhaseReference, type FrameTimingSnapshot } from "../lib/frame-timing";
 import { ScanLoadController, type ScanLoadSnapshot } from "../lib/scan-load";
 import { CandidateConsensus, type CandidateConsensusSnapshot } from "../lib/candidate-consensus";
@@ -205,6 +205,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const resolutionChangingRef = useRef(false);
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
+  const immersiveLaunchRef = useRef<HTMLButtonElement>(null);
   const [immersiveReceiver, setImmersiveReceiver] = useState(false);
   const [receiverWakeLock, setReceiverWakeLock] = useState(false);
   const [cameraTuning, setCameraTuning] = useState<CameraTuningResult>(INITIAL_TUNING);
@@ -216,6 +217,7 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const [telemetry, setTelemetry] = useState<{ candidates: number; consensus: CandidateConsensusSnapshot; exposureGain: number; health: CameraCaptureHealth | null; load: ScanLoadSnapshot; tier: OpticalSearchTier; timing: FrameTimingSnapshot }>({ candidates: 61, consensus: INITIAL_CONSENSUS, exposureGain: 1, health: null, load: INITIAL_LOAD, tier: "acquire", timing: INITIAL_TIMING });
   const [message, setMessage] = useState<ScannerMessage>({ kind: "align" });
   const copy = UI_COPY[language].scanner;
+  const labCopy = LAB_COPY[language];
   const aurora = useMemo(() => confidenceAurora({
     captureHealth: telemetry.health?.score ?? null,
     captureState: telemetry.health?.state ?? null,
@@ -234,11 +236,20 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   useEffect(() => {
     if (!immersiveReceiver) return;
     let wakeLock: WakeLockSentinel | null = null; let disposed = false;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersiveReceiver(false); };
+    const launchButton = immersiveLaunchRef.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setImmersiveReceiver(false); return; }
+      if (event.key !== "Tab") return;
+      const controls = [...document.querySelectorAll<HTMLButtonElement>(".immersive-receiver button:not(:disabled)")];
+      if (!controls.length) return;
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
     document.body.classList.add("is-receiver-immersive"); window.addEventListener("keydown", onKeyDown);
     const focusFrame = window.requestAnimationFrame(() => immersiveCloseRef.current?.focus());
     navigator.wakeLock?.request("screen").then((sentinel) => { if (disposed) void sentinel.release(); else { wakeLock = sentinel; setReceiverWakeLock(true); sentinel.addEventListener("release", () => setReceiverWakeLock(false)); } }).catch(() => setReceiverWakeLock(false));
-    return () => { disposed = true; window.cancelAnimationFrame(focusFrame); window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("is-receiver-immersive"); setReceiverWakeLock(false); void wakeLock?.release(); };
+    return () => { disposed = true; window.cancelAnimationFrame(focusFrame); window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("is-receiver-immersive"); setReceiverWakeLock(false); void wakeLock?.release(); launchButton?.focus(); };
   }, [immersiveReceiver]);
 
   useEffect(() => {
@@ -681,25 +692,25 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
         </div>
       </div>
       <section className={`confidence-aurora state-${aurora.state}`} aria-label={`Optical confidence ${aurora.score} percent, ${aurora.state}, limiting signal ${aurora.bottleneck}`}>
-        <div className="confidence-aurora-heading"><span>OPTICAL CONFIDENCE AURORA</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div>
+        <div className="confidence-aurora-heading"><span>{labCopy.confidenceAurora}</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div>
         <div className="aurora-field" aria-hidden="true">
           {Object.entries(aurora.metrics).map(([metric, value], index) => <i key={metric} style={{ "--aurora-value": value, "--aurora-index": index } as CSSProperties} />)}
         </div>
         <div className="aurora-metrics">{Object.entries(aurora.metrics).map(([metric, value]) => <span key={metric} className={aurora.bottleneck === metric ? "is-limiting" : undefined}><b>{metric}</b><em>{Math.round(value * 100)}</em></span>)}</div>
-        <p>{aurora.state === "idle" ? "Camera evidence appears here" : aurora.state === "ready" ? "Independent evidence converged · integrity path ready" : `Limiting layer: ${aurora.bottleneck} · improve this signal to advance`}</p>
+        <p>{aurora.state === "idle" ? labCopy.cameraEvidence : aurora.state === "ready" ? "Independent evidence converged · integrity path ready" : `Limiting layer: ${aurora.bottleneck} · improve this signal to advance`}</p>
       </section>
       <p className="scanner-message" role="status" aria-live="polite">{scannerMessageText(message, copy, language)}</p>
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
         {running ? copy.stop : copy.start}
       </button>
-      <button className="receiver-immersive-launch" type="button" onClick={() => setImmersiveReceiver(true)}><span>◉</span><div><strong>IMMERSIVE RECEIVER</strong><small>Full-screen alignment · live bottleneck guidance</small></div></button>
+      <button ref={immersiveLaunchRef} className="receiver-immersive-launch" type="button" onClick={() => setImmersiveReceiver(true)}><span>◉</span><div><strong>{labCopy.immersiveReceiver}</strong><small>{labCopy.immersiveReceiverDetail}</small></div></button>
       {immersiveReceiver ? <section className={`immersive-receiver state-${aurora.state}`} role="dialog" aria-modal="true" aria-label="Immersive optical receiver">
         <video ref={immersiveVideoRef} muted playsInline aria-label="Immersive camera view" />
         <div className="immersive-receiver-atmosphere" aria-hidden="true" />
         <header><div className="immersive-receiver-brand"><i /><div><strong>PARTICLEPAIR</strong><small>OPTICAL RECEIVER · {receiverWakeLock ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button ref={immersiveCloseRef} type="button" onClick={() => setImmersiveReceiver(false)} aria-label="Exit immersive receiver">ESC <i>×</i></button></header>
         <div className="immersive-scan-guide" aria-hidden="true">{OPTICAL_QUADRANTS.map((quadrant) => <i key={quadrant} className={occlusionDirection === quadrant ? "is-obstructed" : undefined} />)}<span>SYNC {quality}%</span></div>
-        {!running ? <div className="immersive-camera-idle"><span className="scanner-orbit" /><strong>CAMERA READY</strong><p>Permission is requested only after you start scanning.</p></div> : null}
-        <aside className="immersive-guidance"><div className="immersive-guidance-heading"><span>CONFIDENCE AURORA</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div><div className="immersive-aurora-bars">{Object.entries(aurora.metrics).map(([metric, value]) => <span key={metric} className={aurora.bottleneck === metric ? "is-limiting" : undefined}><i style={{ "--receiver-value": value } as CSSProperties} /><small>{metric}</small></span>)}</div><h2>{guidance.action}</h2><p>{guidance.detail}</p><small>{scannerMessageText(message, copy, language)}</small><button type="button" onClick={running ? stop : start}>{running ? "STOP CAMERA" : "START CAMERA"}</button></aside>
+        {!running ? <div className="immersive-camera-idle"><span className="scanner-orbit" /><strong>{labCopy.ready}</strong><p>{labCopy.immersiveCameraPermission}</p></div> : null}
+        <aside className="immersive-guidance"><div className="immersive-guidance-heading"><span>{labCopy.confidenceAurora}</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div><div className="immersive-aurora-bars">{Object.entries(aurora.metrics).map(([metric, value]) => <span key={metric} className={aurora.bottleneck === metric ? "is-limiting" : undefined}><i style={{ "--receiver-value": value } as CSSProperties} /><small>{metric}</small></span>)}</div><h2>{guidance.action}</h2><p>{guidance.detail}</p><small>{scannerMessageText(message, copy, language)}</small><button type="button" onClick={running ? stop : start}>{running ? labCopy.stopCamera : labCopy.startCamera}</button></aside>
       </section> : null}
     </div>
   );

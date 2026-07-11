@@ -326,7 +326,7 @@ footer { max-width:1500px; margin:0 auto; padding:25px 34px; display:flex; justi
 .mission-control { position:sticky; top:94px; width:100%; min-height:min(552px,calc(100vh - 188px)); align-content:space-between; box-sizing:border-box; }
 
 /* Spectral ivory: one color system across the light shell and optical surfaces. */
-.topbar { position:relative; z-index:5; border-bottom-color:rgba(83,64,112,.13); background:linear-gradient(90deg,rgba(252,251,254,.7),rgba(246,243,251,.62)); box-shadow:0 12px 40px rgba(51,37,79,.035); backdrop-filter:blur(18px) saturate(130%); }
+.topbar { position:sticky; z-index:50; top:0; border-bottom-color:rgba(83,64,112,.13); background:linear-gradient(90deg,rgba(252,251,254,.82),rgba(246,243,251,.76)); box-shadow:0 12px 40px rgba(51,37,79,.035); backdrop-filter:blur(24px) saturate(150%); }
 .brand-mark i { background:#241d31; box-shadow:8px 2px 0 var(--violet),-7px 5px 0 var(--cyan),2px -8px 0 var(--magenta); }
 .protocol-pill,.language-switcher { border-color:rgba(96,74,132,.14); background:rgba(255,255,255,.5); box-shadow:inset 0 1px rgba(255,255,255,.8),0 7px 22px rgba(67,48,101,.045); }
 .language-switcher button.is-active { background:linear-gradient(135deg,#17131f,#35234a); box-shadow:0 5px 14px rgba(64,43,96,.18); }
@@ -352,6 +352,45 @@ footer { max-width:1500px; margin:0 auto; padding:25px 34px; display:flex; justi
 .protocol-section ol { border-top-color:rgba(74,55,100,.15); }
 .protocol-section li { border-color:rgba(74,55,100,.13); }
 footer { border-top-color:rgba(76,57,102,.13); }
+
+/* Product-grade interaction rhythm and legibility for the dense optical console. */
+.icon-button,.protocol-mode button,.v2-proof button,.immersive-launch,.mode-toolbar>button,.mode-categories button,.mode-picker button,.adaptive-calibration button,.render-budget button,.studio-capsule button,.primary-button,.secondary-button,.lab-dock button,.receiver-immersive-launch,.immersive-stage button,.immersive-receiver button,.mission-deep button { touch-action:manipulation; transition:transform .22s cubic-bezier(.22,1,.36,1),border-color .22s ease,background .22s ease,color .22s ease,box-shadow .22s ease,opacity .22s ease; }
+@media (hover:hover) {
+  .icon-button:not(:disabled):hover,.protocol-mode button:not(:disabled):hover,.v2-proof button:not(:disabled):hover,.immersive-launch:not(:disabled):hover,.mode-toolbar>button:not(:disabled):hover,.mode-categories button:not(:disabled):hover,.adaptive-calibration button:not(:disabled):hover,.render-budget button:not(:disabled):hover,.studio-capsule button:not(:disabled):hover,.primary-button:not(:disabled):hover,.secondary-button:not(:disabled):hover,.lab-dock button:not(:disabled):hover,.receiver-immersive-launch:not(:disabled):hover,.immersive-stage button:not(:disabled):hover,.immersive-receiver button:not(:disabled):hover,.mission-deep button:not(:disabled):hover { transform:translateY(-1px); }
+}
+.icon-button:not(:disabled):active,.protocol-mode button:not(:disabled):active,.v2-proof button:not(:disabled):active,.immersive-launch:not(:disabled):active,.mode-toolbar>button:not(:disabled):active,.mode-categories button:not(:disabled):active,.mode-picker button:not(:disabled):active,.adaptive-calibration button:not(:disabled):active,.render-budget button:not(:disabled):active,.studio-capsule button:not(:disabled):active,.primary-button:not(:disabled):active,.secondary-button:not(:disabled):active,.lab-dock button:not(:disabled):active,.receiver-immersive-launch:not(:disabled):active,.immersive-stage button:not(:disabled):active,.immersive-receiver button:not(:disabled):active,.mission-deep button:not(:disabled):active { transform:scale(.975); transition-duration:.08s; }
+
+.mission-live>span,.mission-live>small,.mission-route li>span,.mission-proof>span { font-size:7px; }
+.mission-route strong { font-size:8px; }
+.mission-route small,.mission-proof dd,.mission-privacy { font-size:7px; }
+.mission-deep section>span { font-size:7px; }
+.mission-deep li i,.mission-deep li strong { font-size:6.5px; }
+.protocol-mode button span { font-size:8px; }
+.protocol-mode button strong { font-size:9px; }
+.protocol-mode button small { font-size:8px; }
+.protocol-mode>div span,.protocol-mode>div i { font-size:7px; }
+.protocol-mode code { font-size:9px; }
+.v2-proof button,.v2-proof span { font-size:7px; }
+.v2-proof strong { font-size:8px; }
+.sas-signature span,.sas-signature i { font-size:7px; }
+.phase-chronograph span,.phase-chronograph em { font-size:6px; }
+.mode-intelligence dt { font-size:8px; }
+.mode-intelligence dd { font-size:9px; line-height:1.5; }
+.adaptive-calibration span,.render-budget span,.studio-capsule span,.studio-capsule small { font-size:7px; }
+.adaptive-calibration strong,.render-budget strong,.studio-capsule strong { font-size:9px; }
+.adaptive-calibration button,.render-budget button,.studio-capsule button { font-size:7px; }
+.lab-dock button { font-size:7px; }
+.confidence-aurora-heading span,.confidence-aurora-heading i,.confidence-aurora>p { font-size:7px; }
+.aurora-metrics b { font-size:6px; }
+.receiver-immersive-launch strong,.receiver-immersive-launch small { font-size:8px; }
+.immersive-guidance-heading span,.immersive-guidance-heading i,.immersive-guidance>small,.immersive-guidance>button { font-size:7px; }
+.immersive-guidance>p { font-size:9px; }
+.immersive-aurora-bars small { font-size:6px; }
+.ceremony-heading span,.ceremony-heading strong { font-size:7px; }
+.verification-ceremony li { font-size:6px; }
+.verification-ceremony>p { font-size:8px; }
+.ceremony-actions button { font-size:7px; }
+.verification-ceremony>small { font-size:6.5px; }
 @media (min-width:1051px) {
   .transmitter-card>.mode-toolbar,.transmitter-card>.mode-categories,.transmitter-card>.mode-picker { display:none; }
 }
