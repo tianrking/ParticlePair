@@ -50,6 +50,11 @@ const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
 const RELIABILITY_CORPUS = reliabilitySecretCorpus();
 const ATLAS_CASE_COUNT = CAMERA_CHANNEL_PROFILES.length * VISUAL_MODE_COUNT;
+const MISSION_COPY: Record<Language, { live: string; route: readonly [string, string, string]; routeDetail: readonly [string, string, string]; proof: string; unique: string; corpus: string; channels: string; privacy: string }> = {
+  en: { live: "LIVE VISUAL SYSTEM", route: ["GENERATE", "TRANSMIT", "VERIFY"], routeDetail: ["Ephemeral 128-bit secret", "Complementary optical phases", "Hamming repair + CRC integrity"], proof: "ENGINEERING PROOF", unique: "structurally unique renderers", corpus: "deterministic reliability cases", channels: "cross-channel pixel paths", privacy: "Local-first · no network transport · camera frames stay on device" },
+  es: { live: "SISTEMA VISUAL EN VIVO", route: ["GENERAR", "TRANSMITIR", "VERIFICAR"], routeDetail: ["Secreto efímero de 128 bits", "Fases ópticas complementarias", "Reparación Hamming + integridad CRC"], proof: "PRUEBA DE INGENIERÍA", unique: "renderizadores estructuralmente únicos", corpus: "casos deterministas de fiabilidad", channels: "rutas de píxeles multicanal", privacy: "Local primero · sin transporte de red · los fotogramas permanecen en el dispositivo" },
+  zh: { live: "实时视觉系统", route: ["生成", "传输", "验证"], routeDetail: ["一次性 128 位秘密", "互补双相光学载波", "Hamming 修复与 CRC 完整性"], proof: "工程验证能力", unique: "种结构独立渲染器", corpus: "项确定性可靠性语料", channels: "条跨信道像素路径", privacy: "本地优先 · 不经过网络 · 摄像头画面留在设备内" },
+};
 
 type TestStatus = "idle" | "running" | "success" | "error";
 type EvidenceInspectionState = { status: "idle" | "reading" | "verified" | "tampered" | "invalid"; detail: string; evidence?: ReliabilityEvidence; name?: string; digest?: string; passed?: number };
@@ -163,6 +168,7 @@ export function ParticlePairLab() {
   const [pixelTestDetail, setPixelTestDetail] = useState<PixelDetail>({ kind: "idle" });
   const [pixelResult, setPixelResult] = useState<RenderedPixelLoopbackResult | null>(null);
   const copy = UI_COPY[language];
+  const missionCopy = MISSION_COPY[language];
   const senderSasKey = /^[0-9a-f]{32}$/i.test(secretHex) ? `${secretHex.toLowerCase()}:${protocolMode === 2 ? v2SessionId : 0}` : "";
   const receiverSasKey = result ? `${result.secretHex}:${result.protocolVersion === 2 ? result.sessionId ?? 0 : 0}` : "";
 
@@ -595,7 +601,7 @@ export function ParticlePairLab() {
       </header>
 
       <section className="hero" id="top">
-        <div className="hero-copy">
+        <div className="hero-copy" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
           <p className="eyebrow">{copy.eyebrow}</p>
           <h1>{copy.heroLineOne}<br /><em>{copy.heroLineTwo}</em></h1>
           <p className="lede">{copy.heroDescription}</p>
@@ -604,6 +610,12 @@ export function ParticlePairLab() {
             <div><strong>300</strong><span>{copy.metricPhase}</span></div>
             <div><strong>CRC</strong><span>CCITT</span></div>
           </div>
+          <aside className="mission-control" aria-label={missionCopy.live}>
+            <div className="mission-live"><span><i />{missionCopy.live}</span><strong>{selectedVisualMode.name}</strong><small>{selectedVisualMode.category} · {selectedVisualMode.subtitle}</small><div>{selectedVisualMode.colors.map((color) => <i key={color} style={{ backgroundColor: color }} />)}</div></div>
+            <ol className="mission-route">{missionCopy.route.map((label, index) => <li key={label}><span>0{index + 1}</span><div><strong>{label}</strong><small>{missionCopy.routeDetail[index]}</small></div></li>)}</ol>
+            <div className="mission-proof"><span>{missionCopy.proof}</span><dl><div><dt>{VISUAL_MODE_COUNT}</dt><dd>{missionCopy.unique}</dd></div><div><dt>{RELIABILITY_CASE_COUNT}</dt><dd>{missionCopy.corpus}</dd></div><div><dt>{ATLAS_CASE_COUNT}</dt><dd>{missionCopy.channels}</dd></div></dl></div>
+            <p className="mission-privacy"><i />{missionCopy.privacy}</p>
+          </aside>
         </div>
 
         <div className="transmitter-card" style={{ "--mode-a": selectedVisualMode.colors[0], "--mode-b": selectedVisualMode.colors[1], "--mode-c": selectedVisualMode.colors[2] } as CSSProperties}>
