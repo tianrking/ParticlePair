@@ -40,8 +40,21 @@ import { deriveVisualDna } from "../lib/visual-dna";
 import { decorativeQualityFor, RenderPerformanceGovernor } from "../lib/render-performance";
 import { confidenceAurora } from "../lib/confidence-aurora";
 import { pairingSasMatches, verificationCeremony } from "../lib/verification-ceremony";
+import { decodeStudioPreset, encodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("studio capsule round-trips allowlisted visual configuration", () => {
+  const preset: StudioPreset = { dwell: 900, mode: "portal", protocol: 2, quality: "auto", strength: 0.87 };
+  const encoded = encodeStudioPreset(preset); assert.deepEqual(decodeStudioPreset(encoded), preset); assert.match(studioPresetId(preset), /^[0-9A-F]{8}$/);
+  assert.equal(decodeStudioPreset("pp1~unknown~2~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~3~900~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~2~700~87~auto"), null); assert.equal(decodeStudioPreset("pp1~portal~2~900~4~auto"), null);
+});
+
+test("studio capsule URL strips all unrelated and potentially secret material", () => {
+  const preset: StudioPreset = { dwell: 600, mode: "galaxy", protocol: 1, quality: "balanced", strength: 0.9 };
+  const url = studioPresetUrl("https://pair.example/lab?secret=DEADBEEF&sas=A1B2C3&campaign=x#session-key", preset);
+  const parsed = new URL(url); assert.deepEqual([...parsed.searchParams.keys()], ["studio"]); assert.equal(parsed.searchParams.get("studio"), encodeStudioPreset(preset)); assert.equal(parsed.hash, ""); assert.ok(!url.includes("DEADBEEF")); assert.ok(!url.includes("A1B2C3")); assert.ok(!url.includes("session-key"));
+});
 
 test("verification ceremony requires matching SAS and an explicit human decision", () => {
   const sas = { code: "A1B2C3", words: ["AURORA", "NOVA", "PRISM"] as const };

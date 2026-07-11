@@ -35,6 +35,7 @@ import { buildDiagnosticReport } from "../lib/diagnostic-report";
 import { deriveVisualDna } from "../lib/visual-dna";
 import type { RenderPerformanceSnapshot, RenderQualitySetting } from "../lib/render-performance";
 import { pairingSasMatches, verificationCeremony, type VerificationDecision } from "../lib/verification-ceremony";
+import { decodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -105,6 +106,7 @@ export function ParticlePairLab() {
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const [renderQuality, setRenderQuality] = useState<RenderQualitySetting>("auto");
   const [renderPerformance, setRenderPerformance] = useState<RenderPerformanceSnapshot>({ fps: null, profile: "balanced" });
+  const [capsuleStatus, setCapsuleStatus] = useState<"idle" | "copied" | "error">("idle");
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
@@ -145,8 +147,9 @@ export function ParticlePairLab() {
         if (isLanguage(savedLanguage)) {
           setLanguage(savedLanguage);
         }
-        const savedMode = window.localStorage.getItem(MODE_STORAGE_KEY);
-        if (savedMode && VISUAL_MODES.some((mode) => mode.id === savedMode)) setVisualMode(savedMode);
+        const capsule = decodeStudioPreset(new URL(window.location.href).searchParams.get("studio"));
+        if (capsule) { setVisualMode(capsule.mode); setProtocolMode(capsule.protocol); setV2Dwell(capsule.dwell); setStrength(capsule.strength); setRenderQuality(capsule.quality); }
+        else { const savedMode = window.localStorage.getItem(MODE_STORAGE_KEY); if (savedMode && VISUAL_MODES.some((mode) => mode.id === savedMode)) setVisualMode(savedMode); }
       } catch {
         // Language persistence is optional when storage is blocked.
       }
@@ -264,6 +267,8 @@ export function ParticlePairLab() {
   const activeSenderSas = senderSas?.key === senderSasKey ? senderSas : null;
   const activeReceiverSas = receiverSas?.key === receiverSasKey ? receiverSas : null;
   const ceremony = verificationCeremony(Boolean(result), activeSenderSas, activeReceiverSas, verificationDecision);
+  const studioPreset: StudioPreset = { dwell: v2Dwell, mode: visualMode, protocol: protocolMode, quality: renderQuality, strength };
+  const capsuleId = studioPresetId(studioPreset);
   const filteredModes = VISUAL_MODES.filter((mode) => {
     const categoryMatches = modeCategory === "All" || mode.category === modeCategory;
     const query = modeQuery.trim().toLowerCase();
@@ -274,6 +279,15 @@ export function ParticlePairLab() {
     setVisualMode(mode);
     setAutoShowcase(false);
     try { window.localStorage.setItem(MODE_STORAGE_KEY, mode); } catch { /* Persistence is optional. */ }
+  };
+
+  const copyStudioCapsule = async () => {
+    const url = studioPresetUrl(window.location.href, studioPreset);
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url);
+      else { const textarea = document.createElement("textarea"); textarea.value = url; textarea.style.position = "fixed"; textarea.style.opacity = "0"; document.body.append(textarea); textarea.select(); if (!document.execCommand("copy")) throw new Error("Copy unavailable"); textarea.remove(); }
+      setCapsuleStatus("copied"); window.setTimeout(() => setCapsuleStatus("idle"), 1800);
+    } catch { setCapsuleStatus("error"); }
   };
 
   const stepVisualMode = (direction: -1 | 1) => {
@@ -558,6 +572,7 @@ export function ParticlePairLab() {
           </div>
           <div className={`adaptive-calibration ${calibrationStatus}`} role="status" aria-live="polite" aria-busy={calibrationStatus === "running"}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
           <div className="render-budget" aria-label="Decorative render quality"><div><span>ADAPTIVE MOTION ENGINE</span><strong>{renderPerformance.fps ?? "—"} FPS · {renderPerformance.profile.toUpperCase()} · carrier always full resolution</strong></div>{(["auto", "efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
+          <div className={`studio-capsule ${capsuleStatus}`}><div><span>STUDIO CAPSULE</span><strong>{selectedVisualMode.name} · V{protocolMode} · {Math.round(strength * 100)}%</strong><code>{capsuleId}</code><small>Visual configuration only · zero secret material</small></div><button type="button" onClick={copyStudioCapsule}>{capsuleStatus === "copied" ? "COPIED ✓" : capsuleStatus === "error" ? "COPY FAILED" : "COPY STUDIO LINK"}</button></div>
         </div>
       </section>
 
