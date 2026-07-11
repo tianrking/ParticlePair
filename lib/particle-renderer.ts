@@ -142,7 +142,7 @@ export function renderParticleFrame({
     const borderBoost = isBorderCell(index) ? 1.22 : 1;
     const alpha =
       0.055 +
-      (positive ? strength : -strength) * 0.35 * borderBoost;
+      (positive ? strength : -strength) * 0.4 * borderBoost;
     const glow = context.createRadialGradient(
       x,
       y,

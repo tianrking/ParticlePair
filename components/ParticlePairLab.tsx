@@ -110,6 +110,7 @@ export function ParticlePairLab() {
   const [renderQuality, setRenderQuality] = useState<RenderQualitySetting>("auto");
   const [renderPerformance, setRenderPerformance] = useState<RenderPerformanceSnapshot>({ fps: null, profile: "balanced" });
   const [capsuleStatus, setCapsuleStatus] = useState<"idle" | "copied" | "error">("idle");
+  const [labTool, setLabTool] = useState<"compatibility" | "camera" | "oracle" | "aesthetics">("compatibility");
   const [matrixStatus, setMatrixStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [matrixProgress, setMatrixProgress] = useState(0);
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
@@ -277,6 +278,7 @@ export function ParticlePairLab() {
   const activeSenderSas = senderSas?.key === senderSasKey ? senderSas : null;
   const activeReceiverSas = receiverSas?.key === receiverSasKey ? receiverSas : null;
   const ceremony = verificationCeremony(Boolean(result), activeSenderSas, activeReceiverSas, verificationDecision);
+  const labBusy = matrixStatus === "running" || channelStatus === "running" || oracleStatus === "running" || qualityAuditStatus === "running";
   const studioPreset: StudioPreset = { dwell: v2Dwell, mode: visualMode, protocol: protocolMode, quality: renderQuality, strength };
   const capsuleId = studioPresetId(studioPreset);
   const filteredModes = VISUAL_MODES.filter((mode) => {
@@ -648,27 +650,36 @@ export function ParticlePairLab() {
               </div>
             ) : null}
           </div>
+          <nav className="lab-dock" aria-label="Optical laboratory tools">{([['compatibility', 'COMPAT', matrixStatus], ['camera', 'CAMERA', channelStatus], ['oracle', 'ORACLE', oracleStatus], ['aesthetics', 'AESTHETICS', qualityAuditStatus]] as const).map(([tool, label, status]) => <button type="button" key={tool} disabled={labBusy} aria-pressed={labTool === tool} className={labTool === tool ? "is-active" : ""} onClick={() => setLabTool(tool)}><i className={status} /><span>{label}</span></button>)}</nav>
+          <section className="lab-module" hidden={labTool !== "compatibility"} aria-label="Compatibility matrix laboratory">
           <button className="secondary-button full-width matrix-button" type="button" disabled={!validSecret || matrixStatus === "running" || paused} onClick={runModeMatrix}>
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
           </button>
           <div className={`matrix-result ${matrixStatus}`} role="status" aria-live="polite" aria-busy={matrixStatus === "running"}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
+          </section>
+          <section className="lab-module" hidden={labTool !== "camera"} aria-label="Camera channel laboratory">
           <button className="secondary-button full-width channel-button" type="button" disabled={!validSecret || channelStatus === "running" || paused} onClick={runChannelSuite}>{channelStatus === "running" ? "SIMULATING CAMERA CHANNEL…" : "RUN CAMERA STRESS SUITE"}</button>
           <div className={`channel-suite ${channelStatus}`} role="status" aria-live="polite" aria-busy={channelStatus === "running"}>
             <div className="channel-suite-heading"><span>CAMERA CHANNEL LAB</span><strong>{selectedVisualMode.name}</strong><i>{channelStatus === "success" ? "6/6 PASS" : channelStatus === "error" ? `${Object.values(channelResults).filter((result) => result.ok).length}/6 PASS` : "NOT RUN"}</i></div>
             <div className="channel-profiles">{CAMERA_CHANNEL_PROFILES.map((profile) => { const result = channelResults[profile]; return <div key={profile} className={result ? result.ok ? "pass" : "fail" : ""}><span>{profile.replaceAll("-", " ")}</span><strong>{result ? `${result.quality}%` : "—"}</strong><small>{result ? result.ok ? `CRC · ${result.corrected} FIX` : "REJECTED" : "WAITING"}</small></div>; })}</div>
           </div>
+          </section>
+          <section className="lab-module" hidden={labTool !== "oracle"} aria-label="Environmental mode oracle laboratory">
           <section className={`mode-oracle ${oracleStatus}`} aria-label="Environmental visual mode oracle" aria-busy={oracleStatus === "running"}>
             <div className="mode-oracle-heading"><span>ENVIRONMENTAL MODE ORACLE</span><strong>{oracleStatus === "running" ? `${oracleProgress}/50` : oracleResults.length ? `${oracleResults.filter((result) => result.passed).length}/50 CRC PASS` : "REAL PIXEL RANKING"}</strong></div>
             <div className="oracle-profiles">{CAMERA_CHANNEL_PROFILES.filter((profile) => profile !== "clean").map((profile) => <button type="button" key={profile} disabled={oracleStatus === "running"} aria-pressed={oracleProfile === profile} className={oracleProfile === profile ? "is-active" : ""} onClick={() => { setOracleProfile(profile); setOracleStatus("idle"); setOracleResults([]); }}>{profile.replaceAll("-", " ")}</button>)}</div>
             <button className="oracle-run" type="button" disabled={!validSecret || oracleStatus === "running" || paused} onClick={runModeOracle}>{oracleStatus === "running" ? `TESTING ${oracleProgress}/50 MODES…` : "FIND THE STRONGEST VISUAL"}</button>
             {oracleResults.length ? <ol>{oracleResults.slice(0, 3).map((result) => { const mode = getVisualMode(result.mode); return <li key={result.mode}><span>#{result.rank}</span><div><strong>{mode.name}</strong><small>{Math.round(result.quality * 100)}% sync · {result.corrected} repair · {result.passed ? "CRC pass" : "rejected"}</small></div><button type="button" onClick={() => selectVisualMode(result.mode)}>APPLY</button></li>; })}</ol> : <p>Runs all 50 renderers through the selected synthetic camera channel. Rankings require exact secret recovery and CRC.</p>}
           </section>
+          </section>
+          <section className="lab-module" hidden={labTool !== "aesthetics"} aria-label="Visual aesthetics laboratory">
           <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
           <div className={`visual-audit ${qualityAuditStatus}`} role="status" aria-live="polite" aria-busy={qualityAuditStatus === "running"}>
             <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" || qualityAuditStatus === "error" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG · ${Math.min(...Object.values(visualGrades).map((grade) => grade.distinctness))} D` : "PIXEL METRICS PENDING"}</strong></div>
             <div className="visual-grade-map">{VISUAL_MODES.map((mode) => { const grade = visualGrades[mode.id]; const tier = grade ? grade.grade >= 70 && grade.distinctness >= 60 ? "excellent" : grade.grade >= 60 && grade.distinctness >= 40 ? "good" : "review" : ""; return <button type="button" key={mode.id} title={`${mode.name}${grade ? ` · Q${grade.grade} · D${grade.distinctness}` : ""}`} className={tier} onClick={() => selectVisualMode(mode.id)} aria-label={`${mode.name} visual grade ${grade?.grade ?? "pending"}${grade ? ` distinctness ${grade.distinctness}` : ""}`}>{grade?.grade ?? "·"}</button>; })}</div>
             {visualGrades[visualMode] ? <dl className="current-visual-metrics"><div><dt>VIBRANCY</dt><dd>{visualGrades[visualMode].vibrancy}</dd></div><div><dt>CONTRAST</dt><dd>{visualGrades[visualMode].contrast}</dd></div><div><dt>COLOR RANGE</dt><dd>{visualGrades[visualMode].coverage}</dd></div><div><dt>MOTION</dt><dd>{visualGrades[visualMode].motion}</dd></div><div><dt>DISTINCT</dt><dd>{visualGrades[visualMode].distinctness}</dd></div><div><dt>GRADE</dt><dd>{visualGrades[visualMode].grade}</dd></div></dl> : null}
           </div>
+          </section>
           <button className="diagnostic-export" type="button" onClick={exportDiagnosticReport}><span>↓</span><div><strong>EXPORT LOCAL DIAGNOSTIC</strong><small>Redacted JSON · no secret · no camera frames</small></div></button>
         </article>
 
