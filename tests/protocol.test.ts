@@ -46,6 +46,7 @@ import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clo
 import { receiverGuidance } from "../lib/receiver-guidance";
 import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
 import { buildReliabilityEvidence, inspectReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
+import { compareReliabilityEvidence } from "../lib/reliability-comparator";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -73,6 +74,31 @@ test("reliability evidence inspector distinguishes verified, tampered, and inval
   assert.equal((await inspectReliabilityEvidence({ ...evidence, unexpected: true })).status, "invalid");
   assert.equal((await inspectReliabilityEvidence({ ...evidence, createdAt: "2026-07-11" })).status, "invalid");
   assert.equal((await inspectReliabilityEvidence(null)).status, "invalid");
+});
+
+test("reliability comparator classifies meaningful cell and mode regressions", async () => {
+  const baselineCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.8 }));
+  const candidateCells = baselineCells.map((cell) => ({ ...cell }));
+  candidateCells[0] = { passed: false, quality: 0.76 };
+  candidateCells[50] = { passed: true, quality: 0.77 };
+  candidateCells[1] = { passed: true, quality: 0.83 };
+  candidateCells[2] = { passed: true, quality: 0.81 };
+  const baseline = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, baselineCells);
+  const candidate = await buildReliabilityEvidence("2026-07-11T00:01:00.000Z", 0.9, candidateCells);
+  const comparison = compareReliabilityEvidence(baseline, candidate);
+  assert.deepEqual({ improved: comparison.improved, regressed: comparison.regressed, stable: comparison.stable, verdict: comparison.verdict }, { improved: 1, regressed: 2, stable: 397, verdict: "mixed" });
+  assert.deepEqual(comparison.cells.slice(0, 3).map((cell) => cell.state), ["regressed", "improved", "stable"]);
+  assert.equal(comparison.modes[0].index, 0); assert.equal(comparison.modes[0].regressed, 2);
+});
+
+test("reliability comparator reports stable and improved evidence deterministically", async () => {
+  const baselineCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.7 }));
+  const improvedCells = Array.from({ length: 400 }, () => ({ passed: true, quality: 0.73 }));
+  const baseline = await buildReliabilityEvidence("2026-07-11T00:00:00.000Z", 0.9, baselineCells);
+  const same = await buildReliabilityEvidence("2026-07-11T00:01:00.000Z", 0.9, baselineCells);
+  const improved = await buildReliabilityEvidence("2026-07-11T00:02:00.000Z", 0.9, improvedCells);
+  assert.equal(compareReliabilityEvidence(baseline, same).verdict, "stable");
+  assert.deepEqual({ verdict: compareReliabilityEvidence(baseline, improved).verdict, average: compareReliabilityEvidence(baseline, improved).averageQualityDelta }, { verdict: "improved", average: 0.03 });
 });
 
 test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {

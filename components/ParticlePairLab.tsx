@@ -42,12 +42,15 @@ import { rankModeChannelObservations, type RankedModeChannelObservation } from "
 import { phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { reliabilitySecretCorpus, summarizeReliability, type ReliabilityCell } from "../lib/reliability-marathon";
 import { buildReliabilityEvidence, inspectReliabilityEvidence, type ReliabilityEvidence } from "../lib/reliability-evidence";
+import { compareReliabilityEvidence } from "../lib/reliability-comparator";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
 const RELIABILITY_CORPUS = reliabilitySecretCorpus();
 
 type TestStatus = "idle" | "running" | "success" | "error";
+type EvidenceInspectionState = { status: "idle" | "reading" | "verified" | "tampered" | "invalid"; detail: string; evidence?: ReliabilityEvidence; name?: string; digest?: string; passed?: number };
+const EMPTY_EVIDENCE_INSPECTION: EvidenceInspectionState = { status: "idle", detail: "Choose a sealed reliability JSON." };
 type LoopDetail =
   | { kind: "idle" | "new-secret" | "running" | "error" }
   | { kind: "success"; corrected: number };
@@ -122,7 +125,8 @@ export function ParticlePairLab() {
   const [marathonProgress, setMarathonProgress] = useState(0);
   const [marathonCells, setMarathonCells] = useState<ReliabilityCell[]>([]);
   const [marathonEvidence, setMarathonEvidence] = useState<ReliabilityEvidence | null>(null);
-  const [evidenceInspection, setEvidenceInspection] = useState<{ status: "idle" | "reading" | "verified" | "tampered" | "invalid"; detail: string; name?: string; digest?: string; passed?: number }>({ status: "idle", detail: "Import a sealed reliability JSON to verify it locally." });
+  const [baselineInspection, setBaselineInspection] = useState<EvidenceInspectionState>(EMPTY_EVIDENCE_INSPECTION);
+  const [evidenceInspection, setEvidenceInspection] = useState<EvidenceInspectionState>(EMPTY_EVIDENCE_INSPECTION);
   const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
   const [oracleProfile, setOracleProfile] = useState<CameraChannelProfile>("low-light");
@@ -289,6 +293,7 @@ export function ParticlePairLab() {
   const ceremony = verificationCeremony(Boolean(result), activeSenderSas, activeReceiverSas, verificationDecision);
   const labBusy = matrixStatus === "running" || marathonStatus === "running" || channelStatus === "running" || oracleStatus === "running" || qualityAuditStatus === "running";
   const marathonSummary = summarizeReliability(marathonCells);
+  const evidenceComparison = useMemo(() => baselineInspection.evidence && evidenceInspection.evidence ? compareReliabilityEvidence(baselineInspection.evidence, evidenceInspection.evidence) : null, [baselineInspection.evidence, evidenceInspection.evidence]);
   const compatibilityStatus = marathonStatus === "running" || matrixStatus === "running" ? "running" : marathonStatus === "error" || matrixStatus === "error" ? "error" : marathonStatus === "success" && matrixStatus === "success" ? "success" : marathonStatus !== "idle" ? marathonStatus : matrixStatus;
   const studioPreset: StudioPreset = { dwell: v2Dwell, mode: visualMode, protocol: protocolMode, quality: renderQuality, strength };
   const capsuleId = studioPresetId(studioPreset);
@@ -400,16 +405,23 @@ export function ParticlePairLab() {
     if (!marathonEvidence) return; const url = URL.createObjectURL(new Blob([JSON.stringify(marathonEvidence, null, 2)], { type: "application/json" })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = `particlepair-reliability-${marathonEvidence.seal.digest.slice(0, 12)}.json`; anchor.hidden = true; document.body.append(anchor); anchor.click(); anchor.remove(); window.setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
-  const inspectEvidenceFile = async (event: ChangeEvent<HTMLInputElement>) => {
+  const pinMarathonEvidence = (slot: "baseline" | "candidate") => {
+    if (!marathonEvidence) return;
+    const pinned: EvidenceInspectionState = { status: "verified", detail: "Pinned from this browser's completed marathon.", evidence: marathonEvidence, name: `LIVE RUN · ${marathonEvidence.createdAt}`, digest: marathonEvidence.seal.digest.slice(0, 12), passed: marathonEvidence.summary.passed };
+    (slot === "baseline" ? setBaselineInspection : setEvidenceInspection)(pinned);
+  };
+
+  const inspectEvidenceFile = async (event: ChangeEvent<HTMLInputElement>, slot: "baseline" | "candidate") => {
     const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-    if (file.size > 256_000) { setEvidenceInspection({ status: "invalid", detail: "File exceeds the 256 KB local inspection limit.", name: file.name }); return; }
-    setEvidenceInspection({ status: "reading", detail: "Recomputing the canonical SHA-256 seal locally…", name: file.name });
+    const update = slot === "baseline" ? setBaselineInspection : setEvidenceInspection;
+    if (file.size > 256_000) { update({ status: "invalid", detail: "File exceeds the 256 KB local inspection limit.", name: file.name }); return; }
+    update({ status: "reading", detail: "Recomputing the canonical SHA-256 seal locally…", name: file.name });
     try {
       const inspection = await inspectReliabilityEvidence(JSON.parse(await file.text()));
-      setEvidenceInspection(inspection.status === "verified"
-        ? { status: "verified", detail: inspection.detail, name: file.name, digest: inspection.evidence.seal.digest.slice(0, 12), passed: inspection.evidence.summary.passed }
+      update(inspection.status === "verified"
+        ? { status: "verified", detail: inspection.detail, evidence: inspection.evidence, name: file.name, digest: inspection.evidence.seal.digest.slice(0, 12), passed: inspection.evidence.summary.passed }
         : { status: inspection.status, detail: inspection.detail, name: file.name });
-    } catch { setEvidenceInspection({ status: "invalid", detail: "The selected file is not valid JSON.", name: file.name }); }
+    } catch { update({ status: "invalid", detail: "The selected file is not valid JSON.", name: file.name }); }
   };
 
   const runChannelSuite = async () => {
@@ -698,10 +710,11 @@ export function ParticlePairLab() {
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
           </button>
           <div className={`matrix-result ${matrixStatus}`} role="status" aria-live="polite" aria-busy={matrixStatus === "running"}><span /><p>{matrixStatus === "success" ? "50/50 modes recovered the exact secret and passed CRC." : matrixStatus === "error" ? `${matrixFailures.length} modes need calibration: ${matrixFailures.join(", ")}` : "Full optical compatibility matrix has not run yet."}</p></div>
-          <div className={`reliability-marathon ${marathonStatus}`} role="status" aria-live="polite" aria-busy={marathonStatus === "running"}><div className="marathon-heading"><span>RELIABILITY MARATHON</span><strong>{marathonStatus === "running" ? `${marathonProgress}/400` : marathonCells.length ? `${marathonSummary.passed}/${marathonSummary.total} · ${Math.round(marathonSummary.minimumQuality * 100)}% FLOOR` : "8 SECRETS × 50 MODES"}</strong></div><button type="button" disabled={marathonStatus === "running" || paused} onClick={runReliabilityMarathon}>{marathonStatus === "running" ? "RUNNING DETERMINISTIC CORPUS…" : "RUN 400-CASE MARATHON"}</button>{marathonCells.length ? <div className="marathon-map" aria-label={`${marathonSummary.passed} of ${marathonSummary.total} marathon cases passed`}>{RELIABILITY_CORPUS.map((_, row) => <div key={row}><b>S{row + 1}</b>{VISUAL_MODES.map((mode, column) => { const cell = marathonCells[row * 50 + column]; return <i key={mode.id} className={cell ? cell.passed ? "pass" : "fail" : undefined} title={`${mode.name} · secret ${row + 1}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "PASS" : "FAIL"}` : " · pending"}`} />; })}</div>)}</div> : <p>Fixed corpus · real pixels · exact secret · Hamming · CRC</p>}{marathonEvidence ? <div className="evidence-seal"><span>SHA-256 EVIDENCE SEAL</span><code>{marathonEvidence.seal.digest.slice(0, 12)}</code><small>Integrity only · not a signature or remote attestation</small><button type="button" onClick={exportReliabilityEvidence}>EXPORT SEALED JSON</button></div> : null}</div>
-          <div className={`evidence-inspector ${evidenceInspection.status}`} role="status" aria-live="polite">
-            <div className="evidence-orb" aria-hidden="true"><i /><i /><i /></div><div><span>LOCAL EVIDENCE INSPECTOR</span><strong>{evidenceInspection.status === "verified" ? `${evidenceInspection.passed}/400 VERIFIED` : evidenceInspection.status === "tampered" ? "INTEGRITY MISMATCH" : evidenceInspection.status === "invalid" ? "INVALID RECORD" : evidenceInspection.status === "reading" ? "INSPECTING…" : "DROP-IN VERIFICATION"}</strong><p>{evidenceInspection.detail}</p>{evidenceInspection.name ? <small>{evidenceInspection.name}{evidenceInspection.digest ? ` · ${evidenceInspection.digest}` : ""}</small> : null}</div>
-            <label><input type="file" accept="application/json,.json" disabled={evidenceInspection.status === "reading"} onChange={inspectEvidenceFile} /><b>{evidenceInspection.status === "reading" ? "READING" : "CHOOSE JSON"}</b></label>
+          <div className={`reliability-marathon ${marathonStatus}`} role="status" aria-live="polite" aria-busy={marathonStatus === "running"}><div className="marathon-heading"><span>RELIABILITY MARATHON</span><strong>{marathonStatus === "running" ? `${marathonProgress}/400` : marathonCells.length ? `${marathonSummary.passed}/${marathonSummary.total} · ${Math.round(marathonSummary.minimumQuality * 100)}% FLOOR` : "8 SECRETS × 50 MODES"}</strong></div><button type="button" disabled={marathonStatus === "running" || paused} onClick={runReliabilityMarathon}>{marathonStatus === "running" ? "RUNNING DETERMINISTIC CORPUS…" : "RUN 400-CASE MARATHON"}</button>{marathonCells.length ? <div className="marathon-map" aria-label={`${marathonSummary.passed} of ${marathonSummary.total} marathon cases passed`}>{RELIABILITY_CORPUS.map((_, row) => <div key={row}><b>S{row + 1}</b>{VISUAL_MODES.map((mode, column) => { const cell = marathonCells[row * 50 + column]; return <i key={mode.id} className={cell ? cell.passed ? "pass" : "fail" : undefined} title={`${mode.name} · secret ${row + 1}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "PASS" : "FAIL"}` : " · pending"}`} />; })}</div>)}</div> : <p>Fixed corpus · real pixels · exact secret · Hamming · CRC</p>}{marathonEvidence ? <div className="evidence-seal"><span>SHA-256 EVIDENCE SEAL</span><code>{marathonEvidence.seal.digest.slice(0, 12)}</code><small>Integrity only · not a signature or remote attestation</small><div className="seal-actions"><button type="button" onClick={() => pinMarathonEvidence("baseline")}>PIN A</button><button type="button" onClick={() => pinMarathonEvidence("candidate")}>PIN B</button><button type="button" onClick={exportReliabilityEvidence}>EXPORT JSON</button></div></div> : null}</div>
+          <div className={`evidence-inspector comparator ${evidenceComparison?.verdict ?? "idle"}`} role="status" aria-live="polite">
+            <div className="evidence-orb" aria-hidden="true"><i /><i /><i /></div><div className="comparator-heading"><span>RELIABILITY CONSTELLATION</span><strong>{evidenceComparison ? `${evidenceComparison.verdict.toUpperCase()} · ${evidenceComparison.averageQualityDelta >= 0 ? "+" : ""}${Math.round(evidenceComparison.averageQualityDelta * 100)}%` : "LOCAL A/B EVIDENCE"}</strong><p>Verify two sealed 400-case records, then reveal every meaningful quality drift.</p></div>
+            <div className="evidence-slots">{([['baseline', 'A · BASELINE', baselineInspection], ['candidate', 'B · CANDIDATE', evidenceInspection]] as const).map(([slot, label, inspection]) => <label className={inspection.status} key={slot}><input type="file" accept="application/json,.json" disabled={inspection.status === "reading"} onChange={(event) => inspectEvidenceFile(event, slot)} /><span>{label}</span><b>{inspection.status === "verified" ? `${inspection.passed}/400 · ${inspection.digest}` : inspection.status === "reading" ? "INSPECTING…" : inspection.status === "tampered" ? "TAMPERED" : inspection.status === "invalid" ? "INVALID JSON" : "CHOOSE JSON"}</b><small>{inspection.name ?? inspection.detail}</small></label>)}</div>
+            {evidenceComparison ? <div className="comparison-result"><div className="comparison-stats"><span><b>{evidenceComparison.improved}</b>IMPROVED</span><span><b>{evidenceComparison.stable}</b>STABLE</span><span><b>{evidenceComparison.regressed}</b>REGRESSED</span></div><div className="comparison-map" aria-label={`${evidenceComparison.improved} improved, ${evidenceComparison.regressed} regressed, ${evidenceComparison.stable} stable cases`}>{evidenceComparison.cells.map((cell, index) => <i className={cell.state} key={index} title={`Case ${index + 1} · ${cell.delta >= 0 ? "+" : ""}${Math.round(cell.delta * 100)}%`} />)}</div>{evidenceComparison.regressed ? <ol>{evidenceComparison.modes.filter((mode) => mode.regressed).slice(0, 3).map((mode) => <li key={mode.index}><span>{VISUAL_MODES[mode.index].name}</span><b>{mode.regressed}/8 REGRESSED · {Math.round(mode.averageDelta * 100)}% AVG</b></li>)}</ol> : <p className="comparison-clear">No meaningful regression across the shared corpus.</p>}</div> : null}
           </div>
           </section>
           <section className="lab-module" hidden={labTool !== "camera"} aria-label="Camera channel laboratory">
