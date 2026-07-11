@@ -285,7 +285,7 @@ ParticlePair separa la portadora óptica fiable de la capa artística generativa
 - Local Evidence Inspector importa ese JSON directamente en el navegador, exige el corpus exacto de 400 casos y sus restricciones de esquema y privacidad, recalcula el resumen y el SHA-256 canónico, y distingue registros íntegros, modificados o inválidos. El archivo nunca sale del dispositivo; sigue siendo verificación de integridad, no atestación de identidad.
 - Reliability Constellation compara dos registros ya verificados celda por celda. Una zona muerta de dos puntos porcentuales elimina el ruido de redondeo, mientras que los cambios exactos entre aprobado y fallido siempre tienen prioridad. El mapa espectral de 400 celdas muestra mejoras, estabilidad y regresiones, y la agregación de ocho secretos por modo destaca los tres renderizadores con mayor evidencia de regresión.
 - Camera Channel Lab prueba señal limpia, poca luz, deriva de exposición, desenfoque, ruido de sensor y oclusión parcial. Solo aprueba si el secreto coincide y pasa CRC.
-- La modulación adaptativa busca la intensidad mínima que supera los canales limpio y con deriva, y añade ocho puntos de margen.
+- Adaptive Signal Architect evalúa siete intensidades a través de los seis canales de cámara: 42 rutas de píxeles reales para el visual seleccionado. Elige la intensidad mínima con recuperación CRC completa y una calidad mínima del 47% en el peor canal, y añade un margen limitado de ocho puntos. La matriz espectral 7×6 conserva visibles los fallos de intensidades inferiores.
 
 La decoración no posee bits del protocolo. La atmósfera espectral estática se cancela entre fases opuestas y los detalles móviles permanecen dispersos para que Hamming y la evidencia temporal absorban el error residual.
 

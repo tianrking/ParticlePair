@@ -44,6 +44,7 @@ import { reliabilitySecretCorpus, summarizeReliability, type ReliabilityCell } f
 import { buildReliabilityEvidence, inspectReliabilityEvidence, type ReliabilityEvidence } from "../lib/reliability-evidence";
 import { compareReliabilityEvidence } from "../lib/reliability-comparator";
 import { rankUniversalChannelAtlas, type AtlasModeRank, type AtlasObservation } from "../lib/universal-channel-atlas";
+import { selectSignalArchitecture, SIGNAL_STRENGTH_CANDIDATES, type SignalArchitecture, type SignalArchitectureObservation } from "../lib/adaptive-signal-architect";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -143,6 +144,8 @@ export function ParticlePairLab() {
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
   const [calibrationStatus, setCalibrationStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [calibrationFloor, setCalibrationFloor] = useState<number | null>(null);
+  const [calibrationCells, setCalibrationCells] = useState<SignalArchitectureObservation[]>([]);
+  const [signalArchitecture, setSignalArchitecture] = useState<SignalArchitecture | null>(null);
   const [protocolMode, setProtocolMode] = useState<1 | 2>(1);
   const [v2SessionId, setV2SessionId] = useState(0);
   const [v2IssuedMinute, setV2IssuedMinute] = useState(0);
@@ -488,19 +491,16 @@ export function ParticlePairLab() {
   const calibrateModulation = async () => {
     const canvas = particleCanvasRef.current;
     if (!canvas || !validSecret) return;
-    setCalibrationStatus("running"); setCalibrationFloor(null); setAutoShowcase(false);
-    const candidates = [0.25, 0.32, 0.4, 0.5, 0.62, 0.76, 0.9];
-    let floor: number | null = null;
-    for (const candidate of candidates) {
-      try {
-        const clean = await runRenderedPixelAssessment(canvas, validationFrame, candidate, secretHex, visualMode, "clean");
-        const drift = await runRenderedPixelAssessment(canvas, validationFrame, candidate, secretHex, visualMode, "exposure-drift");
-        if (clean.matchesExpected && drift.matchesExpected && Math.min(clean.quality, drift.quality) >= 0.47) { floor = candidate; break; }
-      } catch { /* Continue to the next stronger modulation candidate. */ }
-      await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    setCalibrationStatus("running"); setCalibrationFloor(null); setCalibrationCells([]); setSignalArchitecture(null); setAutoShowcase(false);
+    const observations: SignalArchitectureObservation[] = [];
+    for (const candidate of SIGNAL_STRENGTH_CANDIDATES) for (const profile of CAMERA_CHANNEL_PROFILES) {
+      try { const decoded = await runRenderedPixelAssessment(canvas, validationFrame, candidate, secretHex, visualMode, profile); observations.push({ passed: decoded.matchesExpected, profile, quality: decoded.quality, strength: candidate }); }
+      catch { observations.push({ passed: false, profile, quality: 0, strength: candidate }); }
+      setCalibrationCells([...observations]); if (observations.length % 6 === 0) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
-    if (floor === null) { setCalibrationStatus("error"); return; }
-    setCalibrationFloor(floor); setStrength(Math.min(1, Number((floor + 0.08).toFixed(2)))); setCalibrationStatus("success");
+    const architecture = selectSignalArchitecture(observations, CAMERA_CHANNEL_PROFILES);
+    if (!architecture) { setCalibrationStatus("error"); return; }
+    setSignalArchitecture(architecture); setCalibrationFloor(architecture.floor); setStrength(architecture.operatingStrength); setCalibrationStatus("success");
   };
 
   const exportDiagnosticReport = () => {
@@ -509,6 +509,8 @@ export function ParticlePairLab() {
       createdAt: new Date().toISOString(),
       transmitter: { modulationStrength: strength, protocolVersion: protocolMode, renderQuality, v2DwellMs: protocolMode === 2 ? v2Dwell : null, visualMode },
       verification: {
+        adaptiveSignal: signalArchitecture ? { cases: calibrationCells.length, floor: signalArchitecture.floor, minimumQuality: signalArchitecture.minimumQuality, operatingStrength: signalArchitecture.operatingStrength, status: calibrationStatus } : { cases: calibrationCells.length, status: calibrationStatus },
+        channelAtlas: { cases: atlasObservations.length, passed: atlasObservations.filter((cell) => cell.passed).length, status: atlasStatus, topMode: atlasResults[0]?.mode ?? null },
         cameraChannel: { results: channelResults, status: channelStatus }, canvasPixel: pixelTestStatus, fountainCanvas: v2Test,
         modeMatrix: { failedModes: matrixFailures, progress: matrixProgress, status: matrixStatus }, reliabilityEvidence: marathonEvidence ? { cases: marathonEvidence.summary.total, passed: marathonEvidence.summary.passed, seal: marathonEvidence.seal.digest, trust: marathonEvidence.seal.trust } : null,
         visualAudit: { average: graded.length ? Math.round(graded.reduce((sum, grade) => sum + grade.grade, 0) / graded.length) : null, minimum: graded.length ? Math.min(...graded.map((grade) => grade.grade)) : null, modesMeasured: graded.length, status: qualityAuditStatus },
@@ -670,7 +672,7 @@ export function ParticlePairLab() {
             />
             <output>{Math.round(strength * 100)}%</output>
           </div>
-          <div className={`adaptive-calibration ${calibrationStatus}`} role="status" aria-live="polite" aria-busy={calibrationStatus === "running"}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? "CALIBRATING CHANNEL…" : "AUTO CALIBRATE"}</button><div><span>ADAPTIVE MODULATION</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO SAFE MARGIN FOUND" : "Find the quietest reliable optical signal"}</strong></div></div>
+          <div className={`adaptive-calibration signal-architect ${calibrationStatus}`} role="status" aria-live="polite" aria-busy={calibrationStatus === "running"}><button type="button" onClick={calibrateModulation} disabled={!validSecret || calibrationStatus === "running" || paused}>{calibrationStatus === "running" ? `ARCHITECTING ${calibrationCells.length}/42…` : "ARCHITECT SIGNAL"}</button><div><span>ADAPTIVE SIGNAL ARCHITECT</span><strong>{calibrationStatus === "success" && calibrationFloor !== null ? `FLOOR ${Math.round(calibrationFloor * 100)}% · OPERATING ${Math.round(strength * 100)}%` : calibrationStatus === "error" ? "NO UNIVERSAL SAFE MARGIN" : "Find the quietest signal that survives all six channels"}</strong></div>{calibrationCells.length ? <div className="signal-spectrum" aria-label={`${calibrationCells.filter((cell) => cell.passed).length} of ${calibrationCells.length} signal calibration cases passed`}>{SIGNAL_STRENGTH_CANDIDATES.map((candidate, row) => <div key={candidate}><b>{Math.round(candidate * 100)}%</b>{CAMERA_CHANNEL_PROFILES.map((profile, column) => { const cell = calibrationCells[row * 6 + column]; return <i key={profile} className={cell ? cell.passed && cell.quality >= 0.47 ? "pass" : "fail" : undefined} title={`${Math.round(candidate * 100)}% · ${profile}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "CRC PASS" : "REJECTED"}` : " · pending"}`} />; })}</div>)}</div> : null}{signalArchitecture ? <small>6/6 CHANNELS · {Math.round(signalArchitecture.minimumQuality * 100)}% WORST QUALITY · +{Math.round(signalArchitecture.margin * 100)}% SAFETY</small> : null}</div>
           <div className="render-budget" aria-label="Decorative render quality"><div><span>ADAPTIVE MOTION ENGINE</span><strong>{renderPerformance.fps ?? "—"} FPS · {renderPerformance.profile.toUpperCase()} · carrier always full resolution</strong></div>{(["auto", "efficient", "balanced", "ultra"] as const).map((profile) => <button type="button" key={profile} aria-pressed={renderQuality === profile} className={renderQuality === profile ? "is-active" : ""} onClick={() => setRenderQuality(profile)}>{profile}</button>)}</div>
           <div className={`studio-capsule ${capsuleStatus}`}><div><span>STUDIO CAPSULE</span><strong>{selectedVisualMode.name} · V{protocolMode} · {Math.round(strength * 100)}%</strong><code>{capsuleId}</code><small>Visual configuration only · zero secret material</small></div><button type="button" onClick={copyStudioCapsule}>{capsuleStatus === "copied" ? "COPIED ✓" : capsuleStatus === "error" ? "COPY FAILED" : "COPY STUDIO LINK"}</button></div>
         </div>

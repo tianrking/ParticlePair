@@ -285,7 +285,7 @@ ParticlePair now separates the reliable optical carrier from the generative art 
 - Local Evidence Inspector accepts that JSON directly in the browser, enforces the exact 400-case corpus/schema/privacy constraints, recomputes the summary and canonical SHA-256 digest, and clearly separates verified, modified, and malformed records. Files never leave the device; this remains integrity verification rather than identity attestation.
 - Reliability Constellation compares two independently verified records cell by cell. A two-percentage-point deadband suppresses rounding noise; exact pass/fail transitions always win. The 400-cell spectral map reports improved, stable, and regressed cases, while an eight-secret per-mode aggregation surfaces the three visual renderers with the strongest regression evidence.
 - The Camera Channel Lab exercises clean, low-light, exposure-drift, defocus, sensor-noise, and partial-occlusion paths. A result counts only after the recovered secret matches and CRC passes.
-- Adaptive modulation searches for the quietest strength that survives both clean and exposure-drift channels, then adds an eight-point safety margin.
+- Adaptive Signal Architect evaluates seven modulation strengths across all six camera channels—42 real-pixel paths for the selected visual. It chooses the quietest strength with complete CRC recovery and at least 47% worst-channel quality, then adds an eight-point bounded safety margin. The 7×6 spectral matrix keeps failed lower strengths visible instead of hiding the calibration evidence.
 
 Decorative motion never owns protocol bits. Static spectral atmosphere cancels between opposite phases; animated details remain sparse enough for Hamming and multi-frame soft evidence to absorb residual error.
 

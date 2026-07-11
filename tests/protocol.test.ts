@@ -48,6 +48,7 @@ import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliabilit
 import { buildReliabilityEvidence, inspectReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
 import { compareReliabilityEvidence } from "../lib/reliability-comparator";
 import { rankUniversalChannelAtlas, type AtlasObservation } from "../lib/universal-channel-atlas";
+import { selectSignalArchitecture, SIGNAL_STRENGTH_CANDIDATES, type SignalArchitectureObservation } from "../lib/adaptive-signal-architect";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -121,6 +122,20 @@ test("universal channel atlas uses repair cost and registry order as stable ties
     { corrected: 1, mode: "ripple", passed: true, profile: "clean", quality: 0.8 },
   ];
   assert.deepEqual(rankUniversalChannelAtlas(observations).slice(0, 3).map((mode) => mode.mode), ["aurora", "ripple", "galaxy"]);
+});
+
+test("adaptive signal architect chooses the quietest universally safe strength", () => {
+  const profiles = ["clean", "low-light", "exposure-drift", "defocus", "sensor-noise", "partial-occlusion"] as const;
+  const observations: SignalArchitectureObservation[] = SIGNAL_STRENGTH_CANDIDATES.flatMap((strength) => profiles.map((profile) => ({ passed: strength >= 0.5, profile, quality: strength >= 0.5 ? 0.62 : 0.3, strength })));
+  assert.deepEqual(selectSignalArchitecture(observations, profiles), { floor: 0.5, margin: 0.08, minimumQuality: 0.62, operatingStrength: 0.58 });
+});
+
+test("adaptive signal architect rejects incomplete channels and weak quality", () => {
+  const profiles = ["clean", "low-light"] as const;
+  const incomplete: SignalArchitectureObservation[] = [{ passed: true, profile: "clean", quality: 0.9, strength: 0.25 }];
+  assert.equal(selectSignalArchitecture(incomplete, profiles), null);
+  const weak: SignalArchitectureObservation[] = profiles.map((profile) => ({ passed: true, profile, quality: 0.46, strength: 0.25 }));
+  assert.equal(selectSignalArchitecture(weak, profiles), null);
 });
 
 test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {
