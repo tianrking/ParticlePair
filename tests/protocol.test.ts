@@ -41,8 +41,24 @@ import { decorativeQualityFor, RenderPerformanceGovernor } from "../lib/render-p
 import { confidenceAurora } from "../lib/confidence-aurora";
 import { pairingSasMatches, verificationCeremony } from "../lib/verification-ceremony";
 import { decodeStudioPreset, encodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
+import { rankModeChannelObservations } from "../lib/mode-oracle";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("environment oracle ranks exact CRC recovery before quality and repair count", () => {
+  const ranked = rankModeChannelObservations([
+    { corrected: 0, mode: "galaxy", passed: false, quality: 0.99 },
+    { corrected: 2, mode: "portal", passed: true, quality: 0.82 },
+    { corrected: 0, mode: "jellyfish", passed: true, quality: 0.82 },
+    { corrected: 0, mode: "anemone", passed: true, quality: 0.76 },
+  ]);
+  assert.deepEqual(ranked.map((result) => result.mode), ["jellyfish", "portal", "anemone", "galaxy"]); assert.deepEqual(ranked.map((result) => result.rank), [1, 2, 3, 4]);
+});
+
+test("environment oracle is stable for exact score ties", () => {
+  const ranked = rankModeChannelObservations([{ corrected: 0, mode: "portal", passed: true, quality: 0.8 }, { corrected: 0, mode: "galaxy", passed: true, quality: 0.8 }]);
+  assert.deepEqual(ranked.map((result) => result.mode), ["galaxy", "portal"]);
+});
 
 test("studio capsule round-trips allowlisted visual configuration", () => {
   const preset: StudioPreset = { dwell: 900, mode: "portal", protocol: 2, quality: "auto", strength: 0.87 };

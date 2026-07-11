@@ -36,6 +36,7 @@ import { deriveVisualDna } from "../lib/visual-dna";
 import type { RenderPerformanceSnapshot, RenderQualitySetting } from "../lib/render-performance";
 import { pairingSasMatches, verificationCeremony, type VerificationDecision } from "../lib/verification-ceremony";
 import { decodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
+import { rankModeChannelObservations, type RankedModeChannelObservation } from "../lib/mode-oracle";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -112,6 +113,10 @@ export function ParticlePairLab() {
   const [matrixFailures, setMatrixFailures] = useState<string[]>([]);
   const [channelStatus, setChannelStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [channelResults, setChannelResults] = useState<Partial<Record<CameraChannelProfile, { ok: boolean; quality: number; corrected: number }>>>({});
+  const [oracleProfile, setOracleProfile] = useState<CameraChannelProfile>("low-light");
+  const [oracleStatus, setOracleStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [oracleProgress, setOracleProgress] = useState(0);
+  const [oracleResults, setOracleResults] = useState<RankedModeChannelObservation[]>([]);
   const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [qualityAuditProgress, setQualityAuditProgress] = useState(0);
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
@@ -374,6 +379,19 @@ export function ParticlePairLab() {
     setChannelStatus(Object.values(results).every((result) => result.ok) ? "success" : "error");
   };
 
+  const runModeOracle = async () => {
+    const canvas = particleCanvasRef.current; if (!canvas || !validSecret) return;
+    setOracleStatus("running"); setOracleProgress(0); setOracleResults([]); setAutoShowcase(false);
+    const observations = [];
+    for (let index = 0; index < VISUAL_MODES.length; index += 1) {
+      const mode = VISUAL_MODES[index];
+      try { const decoded = await runRenderedPixelLoopback(canvas, validationFrame, strength, secretHex, mode.id, oracleProfile); observations.push({ corrected: decoded.correctedCodewords, mode: mode.id, passed: decoded.matchesExpected, quality: decoded.quality }); }
+      catch { observations.push({ corrected: 99, mode: mode.id, passed: false, quality: 0 }); }
+      setOracleProgress(index + 1); if (index % 4 === 3) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    }
+    const ranked = rankModeChannelObservations(observations); setOracleResults(ranked); setOracleStatus(ranked.some((result) => result.passed) ? "success" : "error");
+  };
+
   const runVisualQualityAudit = async () => {
     setQualityAuditStatus("running"); setQualityAuditProgress(0); setAutoShowcase(false);
     const grades: Record<string, VisualQualityMetrics> = {};
@@ -633,6 +651,12 @@ export function ParticlePairLab() {
             <div className="channel-suite-heading"><span>CAMERA CHANNEL LAB</span><strong>{selectedVisualMode.name}</strong><i>{channelStatus === "success" ? "6/6 PASS" : channelStatus === "error" ? `${Object.values(channelResults).filter((result) => result.ok).length}/6 PASS` : "NOT RUN"}</i></div>
             <div className="channel-profiles">{CAMERA_CHANNEL_PROFILES.map((profile) => { const result = channelResults[profile]; return <div key={profile} className={result ? result.ok ? "pass" : "fail" : ""}><span>{profile.replaceAll("-", " ")}</span><strong>{result ? `${result.quality}%` : "—"}</strong><small>{result ? result.ok ? `CRC · ${result.corrected} FIX` : "REJECTED" : "WAITING"}</small></div>; })}</div>
           </div>
+          <section className={`mode-oracle ${oracleStatus}`} aria-label="Environmental visual mode oracle" aria-busy={oracleStatus === "running"}>
+            <div className="mode-oracle-heading"><span>ENVIRONMENTAL MODE ORACLE</span><strong>{oracleStatus === "running" ? `${oracleProgress}/50` : oracleResults.length ? `${oracleResults.filter((result) => result.passed).length}/50 CRC PASS` : "REAL PIXEL RANKING"}</strong></div>
+            <div className="oracle-profiles">{CAMERA_CHANNEL_PROFILES.filter((profile) => profile !== "clean").map((profile) => <button type="button" key={profile} disabled={oracleStatus === "running"} aria-pressed={oracleProfile === profile} className={oracleProfile === profile ? "is-active" : ""} onClick={() => { setOracleProfile(profile); setOracleStatus("idle"); setOracleResults([]); }}>{profile.replaceAll("-", " ")}</button>)}</div>
+            <button className="oracle-run" type="button" disabled={!validSecret || oracleStatus === "running" || paused} onClick={runModeOracle}>{oracleStatus === "running" ? `TESTING ${oracleProgress}/50 MODES…` : "FIND THE STRONGEST VISUAL"}</button>
+            {oracleResults.length ? <ol>{oracleResults.slice(0, 3).map((result) => { const mode = getVisualMode(result.mode); return <li key={result.mode}><span>#{result.rank}</span><div><strong>{mode.name}</strong><small>{Math.round(result.quality * 100)}% sync · {result.corrected} repair · {result.passed ? "CRC pass" : "rejected"}</small></div><button type="button" onClick={() => selectVisualMode(result.mode)}>APPLY</button></li>; })}</ol> : <p>Runs all 50 renderers through the selected synthetic camera channel. Rankings require exact secret recovery and CRC.</p>}
+          </section>
           <button className="secondary-button full-width visual-audit-button" type="button" disabled={!validSecret || qualityAuditStatus === "running" || paused} onClick={runVisualQualityAudit}>{qualityAuditStatus === "running" ? `ANALYZING VISUALS ${qualityAuditProgress}/50` : "AUDIT ALL 50 VISUALS"}</button>
           <div className={`visual-audit ${qualityAuditStatus}`} role="status" aria-live="polite" aria-busy={qualityAuditStatus === "running"}>
             <div className="visual-audit-heading"><span>VISUAL QUALITY ENGINE</span><strong>{qualityAuditStatus === "success" || qualityAuditStatus === "error" ? `${Math.min(...Object.values(visualGrades).map((grade) => grade.grade))} MIN · ${Math.round(Object.values(visualGrades).reduce((sum, grade) => sum + grade.grade, 0) / 50)} AVG · ${Math.min(...Object.values(visualGrades).map((grade) => grade.distinctness))} D` : "PIXEL METRICS PENDING"}</strong></div>
