@@ -43,8 +43,19 @@ import { pairingSasMatches, verificationCeremony } from "../lib/verification-cer
 import { decodeStudioPreset, encodeStudioPreset, studioPresetId, studioPresetUrl, type StudioPreset } from "../lib/studio-preset";
 import { rankModeChannelObservations } from "../lib/mode-oracle";
 import { opticalPhaseSnapshot, phaseSafeShowcaseDelay } from "../lib/optical-clock";
+import { receiverGuidance } from "../lib/receiver-guidance";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
+
+test("immersive receiver guidance prioritizes physical occlusion", () => {
+  const base = { bottleneck: "sync" as const, metrics: { capture: 0.8, sync: 0.2, geometry: 0.7, evidence: 0.5, payload: 0.6 }, score: 52, state: "aligning" as const };
+  assert.deepEqual(receiverGuidance(base, "top-right"), { action: "CLEAR TOP-RIGHT", detail: "Move fingers or reflections away from the highlighted corner." }); assert.equal(receiverGuidance(base, null).action, "CENTER THE SQUARE");
+});
+
+test("immersive receiver guidance maps independent bottlenecks to actions", () => {
+  const snapshot = (bottleneck: "capture" | "geometry" | "evidence" | "payload") => ({ bottleneck, metrics: { capture: 0.5, sync: 0.5, geometry: 0.5, evidence: 0.5, payload: 0.5 }, score: 50, state: "collecting" as const });
+  assert.equal(receiverGuidance(snapshot("capture"), null).action, "IMPROVE EXPOSURE"); assert.equal(receiverGuidance(snapshot("geometry"), null).action, "HOLD PARALLEL"); assert.equal(receiverGuidance(snapshot("evidence"), null).action, "HOLD STILL"); assert.equal(receiverGuidance(snapshot("payload"), null).action, "IMPROVE VISIBILITY");
+});
 
 test("optical chronograph follows exact A and B phase boundaries", () => {
   assert.deepEqual(opticalPhaseSnapshot(0), { phase: "A", progress: 0, remainingMs: 300 });

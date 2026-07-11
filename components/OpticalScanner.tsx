@@ -35,6 +35,7 @@ import { EvidenceDiversityGate } from "../lib/evidence-diversity";
 import { analyzePayloadConfidence, type PayloadConfidenceSummary } from "../lib/payload-confidence";
 import { observedQuadrantForTransform, type OpticalQuadrant } from "../lib/optical-decoder";
 import { confidenceAurora } from "../lib/confidence-aurora";
+import { receiverGuidance } from "../lib/receiver-guidance";
 
 interface OpticalScannerProps {
   language: Language;
@@ -184,6 +185,8 @@ function timedFrameAnalyses(current: OpticalSampleFrame, reference: OpticalSampl
 
 export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const immersiveVideoRef = useRef<HTMLVideoElement>(null);
+  const immersiveCloseRef = useRef<HTMLButtonElement>(null);
   const samplingCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const runningRef = useRef(false);
@@ -202,6 +205,8 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
   const resolutionChangingRef = useRef(false);
   const lastTelemetryRef = useRef(0);
   const [running, setRunning] = useState(false);
+  const [immersiveReceiver, setImmersiveReceiver] = useState(false);
+  const [receiverWakeLock, setReceiverWakeLock] = useState(false);
   const [cameraTuning, setCameraTuning] = useState<CameraTuningResult>(INITIAL_TUNING);
   const [captureProfile, setCaptureProfile] = useState<CaptureResolutionProfile | null>(null);
   const [quality, setQuality] = useState(0);
@@ -224,6 +229,23 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
     sync: quality,
     timingState: telemetry.timing.state,
   }), [evidenceCount, message.kind, payloadConfidence?.coverage, quality, running, telemetry]);
+  const guidance = receiverGuidance(aurora, occlusionDirection);
+
+  useEffect(() => {
+    if (!immersiveReceiver) return;
+    let wakeLock: WakeLockSentinel | null = null; let disposed = false;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setImmersiveReceiver(false); };
+    document.body.classList.add("is-receiver-immersive"); window.addEventListener("keydown", onKeyDown);
+    const focusFrame = window.requestAnimationFrame(() => immersiveCloseRef.current?.focus());
+    navigator.wakeLock?.request("screen").then((sentinel) => { if (disposed) void sentinel.release(); else { wakeLock = sentinel; setReceiverWakeLock(true); sentinel.addEventListener("release", () => setReceiverWakeLock(false)); } }).catch(() => setReceiverWakeLock(false));
+    return () => { disposed = true; window.cancelAnimationFrame(focusFrame); window.removeEventListener("keydown", onKeyDown); document.body.classList.remove("is-receiver-immersive"); setReceiverWakeLock(false); void wakeLock?.release(); };
+  }, [immersiveReceiver]);
+
+  useEffect(() => {
+    const overlayVideo = immersiveVideoRef.current; if (!overlayVideo || !immersiveReceiver) return;
+    overlayVideo.srcObject = running ? streamRef.current : null; if (running) void overlayVideo.play().catch(() => undefined);
+    return () => { overlayVideo.srcObject = null; };
+  }, [immersiveReceiver, running]);
 
   const cancelScheduledFrame = () => {
     const video = videoRef.current;
@@ -670,6 +692,15 @@ export function OpticalScanner({ language, onDecoded }: OpticalScannerProps) {
       <button className="secondary-button full-width" type="button" onClick={running ? stop : start}>
         {running ? copy.stop : copy.start}
       </button>
+      <button className="receiver-immersive-launch" type="button" onClick={() => setImmersiveReceiver(true)}><span>◉</span><div><strong>IMMERSIVE RECEIVER</strong><small>Full-screen alignment · live bottleneck guidance</small></div></button>
+      {immersiveReceiver ? <section className={`immersive-receiver state-${aurora.state}`} role="dialog" aria-modal="true" aria-label="Immersive optical receiver">
+        <video ref={immersiveVideoRef} muted playsInline aria-label="Immersive camera view" />
+        <div className="immersive-receiver-atmosphere" aria-hidden="true" />
+        <header><div className="immersive-receiver-brand"><i /><div><strong>PARTICLEPAIR</strong><small>OPTICAL RECEIVER · {receiverWakeLock ? "SCREEN AWAKE" : "WAKE LOCK OPTIONAL"}</small></div></div><button ref={immersiveCloseRef} type="button" onClick={() => setImmersiveReceiver(false)} aria-label="Exit immersive receiver">ESC <i>×</i></button></header>
+        <div className="immersive-scan-guide" aria-hidden="true">{OPTICAL_QUADRANTS.map((quadrant) => <i key={quadrant} className={occlusionDirection === quadrant ? "is-obstructed" : undefined} />)}<span>SYNC {quality}%</span></div>
+        {!running ? <div className="immersive-camera-idle"><span className="scanner-orbit" /><strong>CAMERA READY</strong><p>Permission is requested only after you start scanning.</p></div> : null}
+        <aside className="immersive-guidance"><div className="immersive-guidance-heading"><span>CONFIDENCE AURORA</span><strong>{aurora.score}%</strong><i>{aurora.state.toUpperCase()}</i></div><div className="immersive-aurora-bars">{Object.entries(aurora.metrics).map(([metric, value]) => <span key={metric} className={aurora.bottleneck === metric ? "is-limiting" : undefined}><i style={{ "--receiver-value": value } as CSSProperties} /><small>{metric}</small></span>)}</div><h2>{guidance.action}</h2><p>{guidance.detail}</p><small>{scannerMessageText(message, copy, language)}</small><button type="button" onClick={running ? stop : start}>{running ? "STOP CAMERA" : "START CAMERA"}</button></aside>
+      </section> : null}
     </div>
   );
 }
