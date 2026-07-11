@@ -47,6 +47,7 @@ import { receiverGuidance } from "../lib/receiver-guidance";
 import { reliabilitySecretCorpus, summarizeReliability } from "../lib/reliability-marathon";
 import { buildReliabilityEvidence, inspectReliabilityEvidence, verifyReliabilityEvidence } from "../lib/reliability-evidence";
 import { compareReliabilityEvidence } from "../lib/reliability-comparator";
+import { rankUniversalChannelAtlas, type AtlasObservation } from "../lib/universal-channel-atlas";
 
 const SECRET = Uint8Array.from({ length: 16 }, (_, index) => index * 11 + 3);
 
@@ -99,6 +100,27 @@ test("reliability comparator reports stable and improved evidence deterministica
   const improved = await buildReliabilityEvidence("2026-07-11T00:02:00.000Z", 0.9, improvedCells);
   assert.equal(compareReliabilityEvidence(baseline, same).verdict, "stable");
   assert.deepEqual({ verdict: compareReliabilityEvidence(baseline, improved).verdict, average: compareReliabilityEvidence(baseline, improved).averageQualityDelta }, { verdict: "improved", average: 0.03 });
+});
+
+test("universal channel atlas ranks by CRC coverage before minimax quality", () => {
+  const profiles = ["clean", "low-light", "exposure-drift", "defocus", "sensor-noise", "partial-occlusion"] as const;
+  const observations: AtlasObservation[] = profiles.flatMap((profile) => [
+    { corrected: 0, mode: "galaxy", passed: true, profile, quality: profile === "partial-occlusion" ? 0.55 : 0.9 },
+    { corrected: 0, mode: "aurora", passed: profile !== "partial-occlusion", profile, quality: 0.95 },
+    { corrected: 2, mode: "ripple", passed: true, profile, quality: 0.7 },
+  ]);
+  const ranked = rankUniversalChannelAtlas(observations);
+  assert.deepEqual(ranked.slice(0, 3).map((mode) => mode.mode), ["ripple", "galaxy", "aurora"]);
+  assert.deepEqual({ passed: ranked[0].passed, worst: ranked[0].worstQuality, average: ranked[0].averageQuality }, { passed: 6, worst: 0.7, average: 0.7 });
+});
+
+test("universal channel atlas uses repair cost and registry order as stable ties", () => {
+  const observations: AtlasObservation[] = [
+    { corrected: 2, mode: "galaxy", passed: true, profile: "clean", quality: 0.8 },
+    { corrected: 1, mode: "aurora", passed: true, profile: "clean", quality: 0.8 },
+    { corrected: 1, mode: "ripple", passed: true, profile: "clean", quality: 0.8 },
+  ];
+  assert.deepEqual(rankUniversalChannelAtlas(observations).slice(0, 3).map((mode) => mode.mode), ["aurora", "ripple", "galaxy"]);
 });
 
 test("reliability marathon corpus is deterministic and contains unique 128-bit secrets", () => {
@@ -571,6 +593,13 @@ test("cyan opponent projection rejects white-balance contamination without erasi
   assert.ok(brightCarrier - dimCarrier > 100);
   assert.ok(brightCarrier > blueNebula * 4);
   assert.ok(brightCarrier > magentaNebula * 4);
+});
+
+test("quantum foam palette remains spectrally separated from the cyan carrier", () => {
+  const mode = VISUAL_MODES.find((candidate) => candidate.id === "quantum-foam"); assert.ok(mode);
+  const carrier = opticalPixelValue(42, 210, 178);
+  const projections = mode.colors.map((hex) => opticalPixelValue(Number.parseInt(hex.slice(1, 3), 16), Number.parseInt(hex.slice(3, 5), 16), Number.parseInt(hex.slice(5, 7), 16)));
+  assert.ok(Math.max(...projections) < carrier * 0.45);
 });
 
 test("capture health separates useful range from clipping, darkness, and flat frames", () => {

@@ -43,6 +43,7 @@ import { phaseSafeShowcaseDelay } from "../lib/optical-clock";
 import { reliabilitySecretCorpus, summarizeReliability, type ReliabilityCell } from "../lib/reliability-marathon";
 import { buildReliabilityEvidence, inspectReliabilityEvidence, type ReliabilityEvidence } from "../lib/reliability-evidence";
 import { compareReliabilityEvidence } from "../lib/reliability-comparator";
+import { rankUniversalChannelAtlas, type AtlasModeRank, type AtlasObservation } from "../lib/universal-channel-atlas";
 
 const LANGUAGE_STORAGE_KEY = "particlepair-language";
 const MODE_STORAGE_KEY = "particlepair-visual-mode";
@@ -133,6 +134,10 @@ export function ParticlePairLab() {
   const [oracleStatus, setOracleStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [oracleProgress, setOracleProgress] = useState(0);
   const [oracleResults, setOracleResults] = useState<RankedModeChannelObservation[]>([]);
+  const [atlasStatus, setAtlasStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [atlasProgress, setAtlasProgress] = useState(0);
+  const [atlasObservations, setAtlasObservations] = useState<AtlasObservation[]>([]);
+  const [atlasResults, setAtlasResults] = useState<AtlasModeRank[]>([]);
   const [qualityAuditStatus, setQualityAuditStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [qualityAuditProgress, setQualityAuditProgress] = useState(0);
   const [visualGrades, setVisualGrades] = useState<Record<string, VisualQualityMetrics>>({});
@@ -291,7 +296,8 @@ export function ParticlePairLab() {
   const activeSenderSas = senderSas?.key === senderSasKey ? senderSas : null;
   const activeReceiverSas = receiverSas?.key === receiverSasKey ? receiverSas : null;
   const ceremony = verificationCeremony(Boolean(result), activeSenderSas, activeReceiverSas, verificationDecision);
-  const labBusy = matrixStatus === "running" || marathonStatus === "running" || channelStatus === "running" || oracleStatus === "running" || qualityAuditStatus === "running";
+  const oracleDockStatus = oracleStatus === "running" || atlasStatus === "running" ? "running" : oracleStatus === "error" || atlasStatus === "error" ? "error" : oracleStatus === "success" || atlasStatus === "success" ? "success" : "idle";
+  const labBusy = matrixStatus === "running" || marathonStatus === "running" || channelStatus === "running" || oracleStatus === "running" || atlasStatus === "running" || qualityAuditStatus === "running";
   const marathonSummary = summarizeReliability(marathonCells);
   const evidenceComparison = useMemo(() => baselineInspection.evidence && evidenceInspection.evidence ? compareReliabilityEvidence(baselineInspection.evidence, evidenceInspection.evidence) : null, [baselineInspection.evidence, evidenceInspection.evidence]);
   const compatibilityStatus = marathonStatus === "running" || matrixStatus === "running" ? "running" : marathonStatus === "error" || matrixStatus === "error" ? "error" : marathonStatus === "success" && matrixStatus === "success" ? "success" : marathonStatus !== "idle" ? marathonStatus : matrixStatus;
@@ -451,6 +457,20 @@ export function ParticlePairLab() {
       setOracleProgress(index + 1); if (index % 4 === 3) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     }
     const ranked = rankModeChannelObservations(observations); setOracleResults(ranked); setOracleStatus(ranked.some((result) => result.passed) ? "success" : "error");
+  };
+
+  const runUniversalChannelAtlas = async () => {
+    const canvas = particleCanvasRef.current; if (!canvas || !validSecret) return;
+    setAtlasStatus("running"); setAtlasProgress(0); setAtlasObservations([]); setAtlasResults([]); setAutoShowcase(false);
+    const observations: AtlasObservation[] = [];
+    for (const profile of CAMERA_CHANNEL_PROFILES) {
+      for (const mode of VISUAL_MODES) {
+        try { const decoded = await runRenderedPixelAssessment(canvas, validationFrame, strength, secretHex, mode.id, profile); observations.push({ corrected: decoded.correctedCodewords, mode: mode.id, passed: decoded.matchesExpected, profile, quality: decoded.quality }); }
+        catch { observations.push({ corrected: 99, mode: mode.id, passed: false, profile, quality: 0 }); }
+        const progress = observations.length; setAtlasProgress(progress); if (progress % 25 === 0) setAtlasObservations([...observations]); if (progress % 8 === 0) await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      }
+    }
+    const ranked = rankUniversalChannelAtlas(observations); setAtlasObservations(observations); setAtlasResults(ranked); setAtlasStatus(observations.every((cell) => cell.passed) ? "success" : "error");
   };
 
   const runVisualQualityAudit = async () => {
@@ -704,7 +724,7 @@ export function ParticlePairLab() {
               </div>
             ) : null}
           </div>
-          <nav className="lab-dock" aria-label="Optical laboratory tools">{([['compatibility', 'COMPAT', compatibilityStatus], ['camera', 'CAMERA', channelStatus], ['oracle', 'ORACLE', oracleStatus], ['aesthetics', 'AESTHETICS', qualityAuditStatus]] as const).map(([tool, label, status]) => <button type="button" key={tool} disabled={labBusy} aria-pressed={labTool === tool} className={labTool === tool ? "is-active" : ""} onClick={() => setLabTool(tool)}><i className={status} /><span>{label}</span></button>)}</nav>
+          <nav className="lab-dock" aria-label="Optical laboratory tools">{([['compatibility', 'COMPAT', compatibilityStatus], ['camera', 'CAMERA', channelStatus], ['oracle', 'ORACLE', oracleDockStatus], ['aesthetics', 'AESTHETICS', qualityAuditStatus]] as const).map(([tool, label, status]) => <button type="button" key={tool} disabled={labBusy} aria-pressed={labTool === tool} className={labTool === tool ? "is-active" : ""} onClick={() => setLabTool(tool)}><i className={status} /><span>{label}</span></button>)}</nav>
           <section className="lab-module" hidden={labTool !== "compatibility"} aria-label="Compatibility matrix laboratory">
           <button className="secondary-button full-width matrix-button" type="button" disabled={!validSecret || matrixStatus === "running" || paused} onClick={runModeMatrix}>
             {matrixStatus === "running" ? `VALIDATING ${matrixProgress}/50` : "VALIDATE ALL 50 VISUAL MODES"}
@@ -730,6 +750,12 @@ export function ParticlePairLab() {
             <div className="oracle-profiles">{CAMERA_CHANNEL_PROFILES.filter((profile) => profile !== "clean").map((profile) => <button type="button" key={profile} disabled={oracleStatus === "running"} aria-pressed={oracleProfile === profile} className={oracleProfile === profile ? "is-active" : ""} onClick={() => { setOracleProfile(profile); setOracleStatus("idle"); setOracleResults([]); }}>{profile.replaceAll("-", " ")}</button>)}</div>
             <button className="oracle-run" type="button" disabled={!validSecret || oracleStatus === "running" || paused} onClick={runModeOracle}>{oracleStatus === "running" ? `TESTING ${oracleProgress}/50 MODES…` : "FIND THE STRONGEST VISUAL"}</button>
             {oracleResults.length ? <ol>{oracleResults.slice(0, 3).map((result) => { const mode = getVisualMode(result.mode); return <li key={result.mode}><span>#{result.rank}</span><div><strong>{mode.name}</strong><small>{Math.round(result.quality * 100)}% sync · {result.corrected} repair · {result.passed ? "CRC pass" : "rejected"}</small></div><button type="button" onClick={() => selectVisualMode(result.mode)}>APPLY</button></li>; })}</ol> : <p>Runs all 50 renderers through the selected synthetic camera channel. Rankings require exact secret recovery and CRC.</p>}
+          </section>
+          <section className={`channel-atlas ${atlasStatus}`} aria-label="Universal camera channel atlas" aria-busy={atlasStatus === "running"}>
+            <div className="atlas-heading"><span>UNIVERSAL CHANNEL ATLAS</span><strong>{atlasStatus === "running" ? `${atlasProgress}/300` : atlasResults.length ? `${atlasObservations.filter((cell) => cell.passed).length}/300 CRC` : "6 CHANNELS × 50 MODES"}</strong></div>
+            <button type="button" disabled={!validSecret || atlasStatus === "running" || oracleStatus === "running" || paused} onClick={runUniversalChannelAtlas}>{atlasStatus === "running" ? `MAPPING ${atlasProgress}/300 PIXEL PATHS…` : "MAP THE UNIVERSAL ROBUSTNESS FIELD"}</button>
+            {atlasObservations.length ? <div className="atlas-map" aria-label={`${atlasObservations.filter((cell) => cell.passed).length} of ${atlasObservations.length} channel atlas cases passed`}>{CAMERA_CHANNEL_PROFILES.map((profile, row) => <div key={profile}><b>{profile.replace("white-balance", "WB").replace("motion-blur", "MOTION").toUpperCase()}</b>{VISUAL_MODES.map((mode, column) => { const cell = atlasObservations[row * 50 + column]; return <i key={mode.id} className={cell ? cell.passed ? "pass" : "fail" : undefined} title={`${mode.name} · ${profile}${cell ? ` · ${Math.round(cell.quality * 100)}% · ${cell.passed ? "CRC PASS" : "REJECTED"}` : " · pending"}`} />; })}</div>)}</div> : <p>Minimax ranking protects the weakest camera condition, not the prettiest average.</p>}
+            {atlasResults.length ? <ol>{atlasResults.slice(0, 3).map((result) => <li key={result.mode}><span>#{result.rank}</span><div><strong>{getVisualMode(result.mode).name}</strong><small>{result.passed}/6 CRC · {Math.round(result.worstQuality * 100)}% FLOOR · {Math.round(result.averageQuality * 100)}% AVG</small></div><button type="button" onClick={() => selectVisualMode(result.mode)}>APPLY</button></li>)}</ol> : null}
           </section>
           </section>
           <section className="lab-module" hidden={labTool !== "aesthetics"} aria-label="Visual aesthetics laboratory">

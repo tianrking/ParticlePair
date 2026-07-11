@@ -117,6 +117,7 @@ const PALETTE_REFINEMENTS: Readonly<Record<string, readonly [string, string, str
   "plasma-core": ["#20fff0", "#ff4fa3", "#ffbf42"],
   portal: ["#15ffd1", "#6270ff", "#ffad3d"],
   pulsar: ["#ffd866", "#48dfff", "#a84cff"],
+  "quantum-foam": ["#ff3fbd", "#ffb83f", "#7755ff"],
   glacier: ["#47fff0", "#4894ff", "#ff4fa8"],
   stardust: ["#00f5ff", "#8b3dff", "#ff176f"],
 };
